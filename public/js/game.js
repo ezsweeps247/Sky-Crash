@@ -24,8 +24,8 @@ function init3D() {
   scene.background = new THREE.Color(0x060618);
   scene.fog = new THREE.FogExp2(0x060618, 0.008);
 
-  camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 4, 12);
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(8, 6, 20);
   camera.lookAt(0, 2, 0);
 
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
@@ -398,21 +398,21 @@ function animate() {
   }
 
   if (cameraShake > 0) {
-    camera.position.x = (Math.random() - 0.5) * cameraShake;
-    camera.position.y = 4 + (Math.random() - 0.5) * cameraShake;
+    camera.position.x = 8 + (Math.random() - 0.5) * cameraShake;
+    camera.position.y = 6 + (Math.random() - 0.5) * cameraShake;
     cameraShake *= 0.93;
     if (cameraShake < 0.01) {
       cameraShake = 0;
-      camera.position.set(0, 4, 12);
+      camera.position.set(8, 6, 20);
     }
   } else if (gameState === 'flying') {
     const t = (Date.now() - startTime) / 1000;
-    camera.position.x = Math.sin(t * 0.2) * 1;
-    camera.position.y = 4 + Math.sin(t * 0.3) * 0.3;
-    camera.position.z = 12 - Math.min(t * 0.1, 2);
+    camera.position.x = 8 + Math.sin(t * 0.15) * 1.5;
+    camera.position.y = 6 + Math.sin(t * 0.25) * 0.5;
+    camera.position.z = 20 - Math.min(t * 0.15, 3);
   }
 
-  camera.lookAt(airplane ? airplane.position.clone().add(new THREE.Vector3(0, 0.5, -3)) : new THREE.Vector3(0, 2, 0));
+  camera.lookAt(airplane ? airplane.position.clone().add(new THREE.Vector3(0, 0, -2)) : new THREE.Vector3(0, 2, 0));
 
   updateParticles();
   renderer.render(scene, camera);
@@ -688,7 +688,7 @@ function resetForNewRound() {
     airplane.position.set(0, airplaneBaseY, 0);
     airplane.rotation.set(0, Math.PI, 0);
   }
-  camera.position.set(0, 4, 12);
+  camera.position.set(8, 6, 20);
 
   updateMultiplierDisplay(0, 'idle');
   setButtonState('bet');
