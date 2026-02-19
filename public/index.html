@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Sky Crash 3D</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="three-canvas"></canvas>
+
+    <div id="ui-overlay">
+      <div class="top-bar">
+        <div class="logo">SKY CRASH</div>
+        <div class="balance-display">
+          <span class="coin">&#9733;</span>
+          <span id="balance">1000.00</span>
+        </div>
+      </div>
+
+      <div class="multiplier-display">
+        <div id="multiplier-text" class="waiting">PLACE YOUR BET</div>
+      </div>
+
+      <div class="bottom-panel">
+        <div class="history-row" id="history-row"></div>
+
+        <div class="bet-controls">
+          <div class="bet-input-group">
+            <div class="bet-input-row">
+              <input type="number" id="bet-amount" value="10" min="1" step="1" placeholder="Bet">
+            </div>
+            <div class="bet-quick-btns">
+              <button class="bet-quick-btn" onclick="setBet(5)">5</button>
+              <button class="bet-quick-btn" onclick="setBet(10)">10</button>
+              <button class="bet-quick-btn" onclick="setBet(25)">25</button>
+              <button class="bet-quick-btn" onclick="setBet(50)">50</button>
+              <button class="bet-quick-btn" onclick="setBet(100)">100</button>
+              <button class="bet-quick-btn" onclick="halfBet()">1/2</button>
+              <button class="bet-quick-btn" onclick="doubleBet()">2x</button>
+            </div>
+            <div class="auto-cashout-row">
+              <label>Auto Cashout:</label>
+              <input type="number" id="auto-cashout" value="" min="1.01" step="0.1" placeholder="Off">
+            </div>
+          </div>
+
+          <button class="action-btn bet" id="action-btn" onclick="handleAction()">
+            BET
+          </button>
+        </div>
+
+        <div id="status-msg">Provably Fair - SHA-256 Hash Chain</div>
+        <div class="credits-bar">
+          Airplane: "boeing 707 (burnout 3)" by amogusstrikesback2 (CC-BY-4.0) |
+          City: "Low Poly Night City Building Skyline" by 99.Miles (CC-BY-4.0)
+        </div>
+      </div>
+    </div>
+
+    <div id="crash-overlay">
+      <div class="crash-flash"></div>
+    </div>
+
+    <div id="verify-modal">
+      <div class="modal-content">
+        <h3>Provably Fair Verification</h3>
+        <p style="font-size:12px;color:#888;margin-bottom:4px;">Pre-Round Commitment (SHA-256 of hash):</p>
+        <div class="hash-display" id="verify-commitment"></div>
+        <p style="font-size:12px;color:#888;margin-bottom:4px;">Revealed Round Hash:</p>
+        <div class="hash-display" id="verify-hash"></div>
+        <div class="crash-result" id="verify-crash"></div>
+        <p style="font-size:11px;color:#666;text-align:center;line-height:1.5;">Verify: SHA256(round_hash) must equal the commitment shown before the round started. Crash point = HMAC-SHA256(hash, salt) converted to multiplier.</p>
+        <button class="modal-close" onclick="closeVerifyModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="/js/game.js"></script>
+</body>
+</html>
