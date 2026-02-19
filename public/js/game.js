@@ -19,6 +19,10 @@ let particles = [];
 let smokeParticles = [];
 let cityGroup;
 let tickPending = false;
+let buildingPositions = [];
+let flightPath = null;
+let crashTarget = null;
+let crashAnimStart = 0;
 
 function init3D() {
   const canvas = document.getElementById('three-canvas');
@@ -96,6 +100,7 @@ function createStarField() {
 
 function createProceduralCity() {
   cityGroup = new THREE.Group();
+  buildingPositions = [];
 
   const buildingMaterials = [
     new THREE.MeshStandardMaterial({ color: 0x1a1a2e, emissive: 0x0a0a15, roughness: 0.8, metalness: 0.3 }),
@@ -119,6 +124,7 @@ function createProceduralCity() {
       building.castShadow = true;
       building.receiveShadow = true;
       cityGroup.add(building);
+      buildingPositions.push({ x: x, y: height / 2 - 2, z: z, height: height, width: width, depth: depth });
 
       addWindowLights(building, width, height, depth, x, z);
     }
@@ -138,12 +144,51 @@ function createProceduralCity() {
       building.position.set(x, height / 2 - 2, z);
       building.castShadow = true;
       cityGroup.add(building);
+      buildingPositions.push({ x: x, y: height / 2 - 2, z: z, height: height, width: width, depth: depth });
 
       addWindowLights(building, width, height, depth, x, z);
     }
   }
 
   scene.add(cityGroup);
+}
+
+function generateFlightPath() {
+  const speed = 0.8 + Math.random() * 0.4;
+  const startX = (Math.random() - 0.5) * 6;
+  const startZ = 5 + Math.random() * 3;
+  const flyDir = Math.random() > 0.5 ? 1 : -1;
+  const turnRate = (0.3 + Math.random() * 0.4) * flyDir;
+  const climbRate = 0.08 + Math.random() * 0.1;
+  const bankAmplitude = 0.12 + Math.random() * 0.1;
+
+  flightPath = { speed, startX, startZ, turnRate, climbRate, bankAmplitude, flyDir };
+}
+
+function pickCrashTarget() {
+  if (buildingPositions.length === 0 || !airplane) return;
+
+  const tallBuildings = buildingPositions.filter(b => b.height > 6);
+  if (tallBuildings.length === 0) return;
+
+  const visible = tallBuildings.filter(b => {
+    const dx = b.x - airplane.position.x;
+    const dz = b.z - airplane.position.z;
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    return dist > 5 && dist < 40;
+  });
+
+  if (visible.length > 0) {
+    crashTarget = visible[Math.floor(Math.random() * visible.length)];
+  } else {
+    crashTarget = tallBuildings[Math.floor(Math.random() * tallBuildings.length)];
+  }
+
+  const hitY = crashTarget.y + crashTarget.height * 0.2 + Math.random() * crashTarget.height * 0.4;
+  const hitX = crashTarget.x + (Math.random() - 0.5) * crashTarget.width * 0.3;
+  const hitZ = crashTarget.z + crashTarget.depth * 0.5 + 0.5;
+  crashTarget.hitPoint = new THREE.Vector3(hitX, hitY, hitZ);
+  crashAnimStart = Date.now();
 }
 
 function addWindowLights(building, bWidth, bHeight, bDepth, bx, bz) {
@@ -501,53 +546,85 @@ function animate() {
   animTime += 0.016;
 
   if (airplane) {
-    if (gameState === 'flying') {
+    if (gameState === 'flying' && flightPath) {
       const flyTime = (Date.now() - startTime) / 1000;
-      const bobAmount = Math.sin(flyTime * 1.5) * 0.3;
-      const heightGain = Math.min(flyTime * 0.15, 3);
-      airplane.position.y = airplaneBaseY + bobAmount + heightGain;
+      const fp = flightPath;
 
-      const bankOsc = Math.sin(flyTime * 0.7) * 0.15;
-      airplaneTargetBank = bankOsc;
-      airplaneCurrentBank += (airplaneTargetBank - airplaneCurrentBank) * 0.05;
+      const forwardDist = flyTime * fp.speed;
+      const turnAngle = Math.sin(flyTime * fp.turnRate) * 4;
+      const heightGain = Math.min(flyTime * fp.climbRate, 4);
+      const bobAmount = Math.sin(flyTime * 1.5) * 0.2;
+
+      airplane.position.x = fp.startX + turnAngle + Math.sin(flyTime * 0.6) * 2;
+      airplane.position.y = airplaneBaseY + bobAmount + heightGain;
+      airplane.position.z = fp.startZ - forwardDist;
+
+      const bankTarget = Math.cos(flyTime * fp.turnRate) * fp.turnRate * fp.bankAmplitude + Math.cos(flyTime * 0.6) * 0.08;
+      airplaneCurrentBank += (bankTarget - airplaneCurrentBank) * 0.05;
       airplane.rotation.z = airplaneCurrentBank;
 
-      const pitchOsc = Math.sin(flyTime * 0.5) * 0.05 - 0.05;
+      const pitchOsc = Math.sin(flyTime * 0.5) * 0.04 - 0.03;
       airplane.rotation.x = pitchOsc;
 
-      const moveX = Math.sin(flyTime * 0.4) * 3;
-      airplane.position.x += (moveX - airplane.position.x) * 0.02;
+      const yawOsc = Math.sin(flyTime * fp.turnRate) * 0.1;
+      airplane.rotation.y = Math.PI + yawOsc;
 
-      const moveZ = Math.sin(flyTime * 0.3) * 2;
-      airplane.position.z = moveZ;
     } else if (gameState === 'crashed') {
-      if (airplane.position.y > -5) {
-        airplane.position.y -= 0.1;
-        airplane.rotation.x += 0.02;
-        airplane.rotation.z += 0.03;
+      if (crashTarget && crashTarget.hitPoint) {
+        const t = (Date.now() - crashAnimStart) / 1000;
+        const crashDuration = 0.8;
+
+        if (t < crashDuration) {
+          const progress = Math.min(t / crashDuration, 1);
+          const eased = progress * progress;
+          const startPos = crashTarget.startPos;
+          if (startPos) {
+            airplane.position.x = startPos.x + (crashTarget.hitPoint.x - startPos.x) * eased;
+            airplane.position.y = startPos.y + (crashTarget.hitPoint.y - startPos.y) * eased;
+            airplane.position.z = startPos.z + (crashTarget.hitPoint.z - startPos.z) * eased;
+            airplane.rotation.x = -0.3 * eased;
+            airplane.rotation.z += 0.02 * eased;
+          }
+        } else {
+          airplane.visible = false;
+        }
+      } else {
+        if (airplane.position.y > -5) {
+          airplane.position.y -= 0.15;
+          airplane.rotation.x += 0.03;
+          airplane.rotation.z += 0.04;
+        }
       }
     } else {
       airplane.position.y = airplaneBaseY + Math.sin(animTime * 0.8) * 0.15;
       airplane.rotation.z = Math.sin(animTime * 0.5) * 0.02;
       airplane.rotation.x = 0;
+      airplane.rotation.y = Math.PI;
       airplane.position.x += (0 - airplane.position.x) * 0.02;
       airplane.position.z += (0 - airplane.position.z) * 0.02;
     }
   }
 
+  const camOffsetX = 5;
+  const camOffsetY = 10;
+  const camOffsetZ = 16;
+
   if (cameraShake > 0) {
-    camera.position.x = 5 + (Math.random() - 0.5) * cameraShake;
-    camera.position.y = 10 + (Math.random() - 0.5) * cameraShake;
+    const planePos = airplane ? airplane.position : new THREE.Vector3(0, 2, 0);
+    camera.position.x = planePos.x + camOffsetX + (Math.random() - 0.5) * cameraShake;
+    camera.position.y = planePos.y + camOffsetY - 2 + (Math.random() - 0.5) * cameraShake;
+    camera.position.z = planePos.z + camOffsetZ + (Math.random() - 0.5) * cameraShake;
     cameraShake *= 0.93;
     if (cameraShake < 0.01) {
       cameraShake = 0;
-      camera.position.set(5, 10, 16);
     }
-  } else if (gameState === 'flying') {
+  } else if (gameState === 'flying' && airplane) {
     const t = (Date.now() - startTime) / 1000;
-    camera.position.x = 5 + Math.sin(t * 0.15) * 1.5;
-    camera.position.y = 10 + Math.sin(t * 0.25) * 0.5;
-    camera.position.z = 16 - Math.min(t * 0.15, 3);
+    camera.position.x = airplane.position.x + camOffsetX + Math.sin(t * 0.15) * 1.5;
+    camera.position.y = airplane.position.y + camOffsetY - 2 + Math.sin(t * 0.25) * 0.5;
+    camera.position.z = airplane.position.z + camOffsetZ;
+  } else if (gameState === 'idle') {
+    camera.position.set(5, 10, 16);
   }
 
   camera.lookAt(airplane ? airplane.position.clone().add(new THREE.Vector3(0, 0, -2)) : new THREE.Vector3(0, 2, 0));
@@ -704,6 +781,12 @@ async function beginFlying() {
 
   gameState = 'flying';
   currentMultiplier = 1.00;
+  generateFlightPath();
+
+  if (airplane) {
+    airplane.position.set(flightPath.startX, airplaneBaseY, flightPath.startZ);
+    airplane.visible = true;
+  }
 
   playEngineSound();
   setButtonState('cashout');
@@ -790,16 +873,31 @@ async function triggerCrash(data) {
   }
 
   stopEngineSound();
-  playExplosionSound();
 
   crashPoint = data.crashPoint;
   updateMultiplierDisplay(crashPoint, 'crashed');
 
   if (airplane) {
-    createExplosionParticles(airplane.position.clone());
-  }
+    crashTarget = null;
+    pickCrashTarget();
+    if (crashTarget && crashTarget.hitPoint) {
+      crashTarget.startPos = airplane.position.clone();
+      crashAnimStart = Date.now();
 
-  cameraShake = 1.5;
+      setTimeout(() => {
+        playExplosionSound();
+        if (airplane) createExplosionParticles(crashTarget.hitPoint.clone());
+        cameraShake = 2.0;
+      }, 750);
+    } else {
+      playExplosionSound();
+      createExplosionParticles(airplane.position.clone());
+      cameraShake = 1.5;
+    }
+  } else {
+    playExplosionSound();
+    cameraShake = 1.5;
+  }
 
   const overlay = document.getElementById('crash-overlay');
   overlay.classList.add('active');
@@ -821,6 +919,8 @@ function resetForNewRound() {
   gameState = 'idle';
   currentMultiplier = 1.00;
   cashedOut = false;
+  flightPath = null;
+  crashTarget = null;
 
   for (let i = activeExplosions.length - 1; i >= 0; i--) {
     scene.remove(activeExplosions[i]);
