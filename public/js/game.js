@@ -164,39 +164,9 @@ function addWindowLights(building, bWidth, bHeight, bDepth, bx, bz) {
 }
 
 function loadModels() {
+  createAirplane();
+
   const loader = new THREE.GLTFLoader();
-
-  loader.load('/models/airplane/scene.gltf', (gltf) => {
-    airplane = gltf.scene;
-    airplane.scale.set(0.15, 0.15, 0.15);
-    airplane.position.set(0, airplaneBaseY, 0);
-    airplane.rotation.y = Math.PI;
-
-    airplane.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-
-    const engineGlow = new THREE.PointLight(0xff4400, 0.5, 5);
-    engineGlow.position.set(0, 0, -3);
-    airplane.add(engineGlow);
-
-    const navLightLeft = new THREE.PointLight(0xff0000, 0.3, 3);
-    navLightLeft.position.set(-5, 0, 0);
-    airplane.add(navLightLeft);
-
-    const navLightRight = new THREE.PointLight(0x00ff00, 0.3, 3);
-    navLightRight.position.set(5, 0, 0);
-    airplane.add(navLightRight);
-
-    scene.add(airplane);
-  }, undefined, (error) => {
-    console.warn('Could not load airplane GLTF, using fallback');
-    createFallbackAirplane();
-  });
-
   loader.load('/models/city/scene.gltf', (gltf) => {
     const cityModel = gltf.scene;
     cityModel.scale.set(0.8, 0.8, 0.8);
@@ -223,27 +193,94 @@ function loadModels() {
   });
 }
 
-function createFallbackAirplane() {
+function createAirplane() {
   airplane = new THREE.Group();
 
-  const bodyGeom = new THREE.CylinderGeometry(0.3, 0.25, 4, 8);
-  const bodyMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.6, roughness: 0.3 });
-  const body = new THREE.Mesh(bodyGeom, bodyMat);
-  body.rotation.z = Math.PI / 2;
-  airplane.add(body);
+  const fuselageMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 0.7, roughness: 0.2 });
+  const accentMat = new THREE.MeshStandardMaterial({ color: 0x1a5276, metalness: 0.5, roughness: 0.3 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2 });
+  const windowMat = new THREE.MeshStandardMaterial({ color: 0x87ceeb, metalness: 0.9, roughness: 0.1, emissive: 0x224466, emissiveIntensity: 0.3 });
 
-  const wingGeom = new THREE.BoxGeometry(0.1, 3.5, 0.8);
-  const wingMat = new THREE.MeshStandardMaterial({ color: 0xbbbbbb, metalness: 0.5, roughness: 0.4 });
-  const wings = new THREE.Mesh(wingGeom, wingMat);
+  const fuselageGeom = new THREE.CylinderGeometry(0.5, 0.35, 7, 12);
+  const fuselage = new THREE.Mesh(fuselageGeom, fuselageMat);
+  fuselage.rotation.z = Math.PI / 2;
+  airplane.add(fuselage);
+
+  const noseGeom = new THREE.SphereGeometry(0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+  const nose = new THREE.Mesh(noseGeom, fuselageMat);
+  nose.rotation.z = -Math.PI / 2;
+  nose.position.set(3.5, 0, 0);
+  airplane.add(nose);
+
+  const cockpitGeom = new THREE.SphereGeometry(0.45, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2);
+  const cockpit = new THREE.Mesh(cockpitGeom, windowMat);
+  cockpit.rotation.z = -Math.PI / 2;
+  cockpit.position.set(3.3, 0.15, 0);
+  airplane.add(cockpit);
+
+  const wingGeom = new THREE.BoxGeometry(2, 6, 0.12);
+  const wings = new THREE.Mesh(wingGeom, accentMat);
+  wings.position.set(-0.3, 0, 0);
   airplane.add(wings);
 
-  const tailGeom = new THREE.BoxGeometry(0.05, 1.2, 0.5);
-  const tail = new THREE.Mesh(tailGeom, wingMat);
-  tail.position.set(-1.8, 0.5, 0);
-  airplane.add(tail);
+  const wingTipGeomL = new THREE.BoxGeometry(0.4, 0.15, 0.5);
+  const wingTipL = new THREE.Mesh(wingTipGeomL, accentMat);
+  wingTipL.position.set(-0.3, 3, 0);
+  airplane.add(wingTipL);
+  const wingTipR = new THREE.Mesh(wingTipGeomL, accentMat);
+  wingTipR.position.set(-0.3, -3, 0);
+  airplane.add(wingTipR);
+
+  const tailWingGeom = new THREE.BoxGeometry(1.2, 2.5, 0.08);
+  const tailWing = new THREE.Mesh(tailWingGeom, accentMat);
+  tailWing.position.set(-3.2, 0, 0);
+  airplane.add(tailWing);
+
+  const vertTailGeom = new THREE.BoxGeometry(1.5, 0.08, 1.8);
+  const vertTail = new THREE.Mesh(vertTailGeom, accentMat);
+  vertTail.position.set(-3, 0, 0.9);
+  airplane.add(vertTail);
+
+  const stripeGeom = new THREE.CylinderGeometry(0.52, 0.37, 7.05, 12, 1, true, -0.3, 0.6);
+  const stripe = new THREE.Mesh(stripeGeom, accentMat);
+  stripe.rotation.z = Math.PI / 2;
+  airplane.add(stripe);
+
+  for (let i = 0; i < 2; i++) {
+    const side = i === 0 ? 1.5 : -1.5;
+    const engineGeom = new THREE.CylinderGeometry(0.2, 0.22, 1.2, 8);
+    const engine = new THREE.Mesh(engineGeom, darkMat);
+    engine.rotation.z = Math.PI / 2;
+    engine.position.set(0.3, side, -0.35);
+    airplane.add(engine);
+
+    const intakeGeom = new THREE.RingGeometry(0.05, 0.2, 8);
+    const intakeMat = new THREE.MeshStandardMaterial({ color: 0xff4400, emissive: 0xff2200, emissiveIntensity: 0.8, side: THREE.DoubleSide });
+    const intake = new THREE.Mesh(intakeGeom, intakeMat);
+    intake.rotation.y = Math.PI / 2;
+    intake.position.set(-0.3, side, -0.35);
+    airplane.add(intake);
+  }
+
+  const engineGlow = new THREE.PointLight(0xff4400, 1, 8);
+  engineGlow.position.set(-1, 0, 0);
+  airplane.add(engineGlow);
+
+  const navLightLeft = new THREE.PointLight(0xff0000, 0.5, 5);
+  navLightLeft.position.set(-0.3, 3.2, 0);
+  airplane.add(navLightLeft);
+
+  const navLightRight = new THREE.PointLight(0x00ff00, 0.5, 5);
+  navLightRight.position.set(-0.3, -3.2, 0);
+  airplane.add(navLightRight);
+
+  const tailLight = new THREE.PointLight(0xffffff, 0.3, 4);
+  tailLight.position.set(-3.5, 0, 1.5);
+  airplane.add(tailLight);
 
   airplane.position.set(0, airplaneBaseY, 0);
-  airplane.scale.set(1.5, 1.5, 1.5);
+  airplane.rotation.y = Math.PI;
+  airplane.scale.set(1.2, 1.2, 1.2);
   scene.add(airplane);
 }
 
