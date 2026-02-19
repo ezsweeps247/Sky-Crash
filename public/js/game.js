@@ -164,9 +164,40 @@ function addWindowLights(building, bWidth, bHeight, bDepth, bx, bz) {
 }
 
 function loadModels() {
-  createAirplane();
-
   const loader = new THREE.GLTFLoader();
+
+  loader.load('/models/airplane/scene.gltf', (gltf) => {
+    airplane = gltf.scene;
+    airplane.scale.set(10, 10, 10);
+    airplane.position.set(0, airplaneBaseY, 0);
+    airplane.rotation.y = Math.PI;
+
+    airplane.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    const engineGlow = new THREE.PointLight(0xff4400, 1, 8);
+    engineGlow.position.set(-1, 0, 0);
+    airplane.add(engineGlow);
+
+    const navLightLeft = new THREE.PointLight(0xff0000, 0.5, 5);
+    navLightLeft.position.set(0, 0, 3);
+    airplane.add(navLightLeft);
+
+    const navLightRight = new THREE.PointLight(0x00ff00, 0.5, 5);
+    navLightRight.position.set(0, 0, -3);
+    airplane.add(navLightRight);
+
+    scene.add(airplane);
+    console.log('Boeing 707 GLTF model loaded successfully');
+  }, undefined, (error) => {
+    console.warn('Could not load airplane GLTF, using fallback:', error);
+    createAirplane();
+  });
+
   loader.load('/models/city/scene.gltf', (gltf) => {
     const cityModel = gltf.scene;
     cityModel.scale.set(0.8, 0.8, 0.8);
