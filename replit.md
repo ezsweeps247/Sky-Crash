@@ -7,7 +7,7 @@ A 3D crash game built with Three.js featuring a Boeing 707 airplane navigating t
 - **Backend**: Node.js + Express server on port 5000
 - **Frontend**: Vanilla JS + Three.js (r128) for 3D rendering
 - **Provably Fair**: SHA-256 hash chain with HMAC for crash point generation
-- **3D Models**: GLTF format - Boeing 707 airplane + Low Poly Night City Skyline
+- **3D Models**: GLTF format - Boeing 707 airplane + Low Poly Night City Skyline + Sparks/Explosion effect
 - **Sound**: Engine loop (WAV) + Explosion (FLAC)
 
 ## Project Structure
@@ -19,6 +19,7 @@ public/
   js/game.js                 - Three.js 3D scene + game logic
   models/airplane/           - Boeing 707 GLTF model + textures
   models/city/               - Night city skyline GLTF model + textures
+  models/explosion/          - Sparks/explosion GLTF model + textures
   sounds/                    - Engine and explosion audio
 ```
 
@@ -42,3 +43,4 @@ public/
 ## 3D Model Credits (CC-BY-4.0)
 - Airplane: "boeing 707 (burnout 3)" by amogusstrikesback2
 - City: "Low Poly Night City Building Skyline" by 99.Miles
+- Explosion: "Sparks/explosion" by OPREXT

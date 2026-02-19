@@ -1,5 +1,7 @@
 let scene, camera, renderer, airplane, cityModels = [];
 let engineSound, explosionSound;
+let explosionModel = null;
+let activeExplosions = [];
 let gameLoop = null;
 let currentMultiplier = 1.00;
 let crashPoint = 0;
@@ -206,6 +208,19 @@ function loadModels() {
     createAirplane();
   });
 
+  loader.load('/models/explosion/scene.gltf', (gltf) => {
+    explosionModel = gltf.scene;
+    explosionModel.traverse((child) => {
+      if (child.isMesh && child.material) {
+        child.material.transparent = true;
+        child.material.depthWrite = false;
+      }
+    });
+    console.log('Explosion GLTF model loaded');
+  }, undefined, (error) => {
+    console.warn('Could not load explosion GLTF model:', error);
+  });
+
   loader.load('/models/city/scene.gltf', (gltf) => {
     const cityModel = gltf.scene;
     cityModel.scale.set(0.8, 0.8, 0.8);
@@ -360,6 +375,33 @@ function onWindowResize() {
 }
 
 function createExplosionParticles(position) {
+  if (explosionModel) {
+    for (let i = 0; i < 5; i++) {
+      const exp = explosionModel.clone();
+      const s = 2 + Math.random() * 3;
+      exp.scale.set(s, s, s);
+      exp.position.copy(position);
+      exp.position.x += (Math.random() - 0.5) * 2;
+      exp.position.y += (Math.random() - 0.5) * 2;
+      exp.position.z += (Math.random() - 0.5) * 2;
+      exp.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
+      exp.userData.life = 1.0;
+      exp.userData.decay = 0.008 + Math.random() * 0.012;
+      exp.userData.rotSpeed = new THREE.Vector3(
+        (Math.random() - 0.5) * 0.1,
+        (Math.random() - 0.5) * 0.1,
+        (Math.random() - 0.5) * 0.1
+      );
+      exp.userData.velocity = new THREE.Vector3(
+        (Math.random() - 0.5) * 0.15,
+        Math.random() * 0.1,
+        (Math.random() - 0.5) * 0.15
+      );
+      scene.add(exp);
+      activeExplosions.push(exp);
+    }
+  }
+
   const colors = [0xff4400, 0xff6600, 0xff8800, 0xffaa00, 0xff2200];
   for (let i = 0; i < 40; i++) {
     const geometry = new THREE.SphereGeometry(0.1 + Math.random() * 0.2, 4, 4);
@@ -429,6 +471,26 @@ function updateParticles() {
       p.geometry.dispose();
       p.material.dispose();
       smokeParticles.splice(i, 1);
+    }
+  }
+
+  for (let i = activeExplosions.length - 1; i >= 0; i--) {
+    const exp = activeExplosions[i];
+    exp.userData.life -= exp.userData.decay;
+    exp.position.add(exp.userData.velocity);
+    exp.rotation.x += exp.userData.rotSpeed.x;
+    exp.rotation.y += exp.userData.rotSpeed.y;
+    exp.rotation.z += exp.userData.rotSpeed.z;
+    const s = exp.scale.x * (1 + exp.userData.decay * 2);
+    exp.scale.set(s, s, s);
+    exp.traverse((child) => {
+      if (child.isMesh && child.material) {
+        child.material.opacity = exp.userData.life;
+      }
+    });
+    if (exp.userData.life <= 0) {
+      scene.remove(exp);
+      activeExplosions.splice(i, 1);
     }
   }
 }
@@ -760,9 +822,15 @@ function resetForNewRound() {
   currentMultiplier = 1.00;
   cashedOut = false;
 
+  for (let i = activeExplosions.length - 1; i >= 0; i--) {
+    scene.remove(activeExplosions[i]);
+  }
+  activeExplosions = [];
+
   if (airplane) {
     airplane.position.set(0, airplaneBaseY, 0);
     airplane.rotation.set(0, Math.PI, 0);
+    airplane.visible = true;
   }
   camera.position.set(5, 10, 16);
 
