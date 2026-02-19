@@ -1,0 +1,11 @@
+Model Information:
+* title:	boeing 707 (burnout 3)
+* source:	https://sketchfab.com/3d-models/boeing-707-burnout-3-1cfce56277dc470db3175e58895b1124
+* author:	amogusstrikesback2 (https://sketchfab.com/amogusstrikesback2)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "boeing 707 (burnout 3)" (https://sketchfab.com/3d-models/boeing-707-burnout-3-1cfce56277dc470db3175e58895b1124) by amogusstrikesback2 (https://sketchfab.com/amogusstrikesback2) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
