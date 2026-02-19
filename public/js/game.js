@@ -34,23 +34,31 @@ function init3D() {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.8;
 
-  const ambientLight = new THREE.AmbientLight(0x1a1a3e, 0.6);
+  const ambientLight = new THREE.AmbientLight(0x8899bb, 1.2);
   scene.add(ambientLight);
 
-  const moonLight = new THREE.DirectionalLight(0x6677aa, 0.8);
+  const moonLight = new THREE.DirectionalLight(0xaabbdd, 1.8);
   moonLight.position.set(20, 30, -10);
   moonLight.castShadow = true;
   scene.add(moonLight);
 
-  const cityGlow = new THREE.PointLight(0x00f0ff, 1.5, 100);
+  const frontLight = new THREE.DirectionalLight(0xffffff, 1.0);
+  frontLight.position.set(5, 10, 15);
+  scene.add(frontLight);
+
+  const cityGlow = new THREE.PointLight(0x00f0ff, 2.5, 120);
   cityGlow.position.set(0, -5, -20);
   scene.add(cityGlow);
 
-  const warmGlow = new THREE.PointLight(0xff6600, 0.5, 60);
+  const warmGlow = new THREE.PointLight(0xff6600, 1.0, 80);
   warmGlow.position.set(-10, 5, -15);
   scene.add(warmGlow);
+
+  const spotOnPlane = new THREE.PointLight(0xffffff, 1.5, 30);
+  spotOnPlane.position.set(0, 8, 5);
+  scene.add(spotOnPlane);
 
   createStarField();
   loadModels();
