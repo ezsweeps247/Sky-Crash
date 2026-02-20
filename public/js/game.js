@@ -30,6 +30,8 @@ let citySegmentZ = 0;
 let flySpeedRamp = 0;
 let resetFadeIn = 0;
 let takeoffStartTime = 0;
+let serverStartRequested = false;
+let serverStartData = null;
 const TAKEOFF_DURATION = 3.5;
 const RUNWAY_Z = 60;
 let camLerpFactor = 0.03;
@@ -801,7 +803,7 @@ function animate() {
   }
 
   if (flySpeedRamp < 1 && gameState === 'flying') {
-    flySpeedRamp = Math.min(1, flySpeedRamp + dt * 0.5);
+    flySpeedRamp = Math.min(1, flySpeedRamp + dt * 0.8);
   }
 
   if (airplane) {
@@ -920,61 +922,81 @@ function animate() {
           airplane.rotation.z += 0.03;
         }
       }
-    } else if (gameState === 'takeoff') {
+    } else if (gameState === 'takeoff' || gameState === 'transitioning') {
       const t = (Date.now() - takeoffStartTime) / 1000;
       const progress = Math.min(t / TAKEOFF_DURATION, 1);
+      const postTakeoffTime = Math.max(0, t - TAKEOFF_DURATION);
 
       const accelCurve = progress * progress;
       const runwayLength = RUNWAY_Z + 20;
-      const runZ = RUNWAY_Z - accelCurve * runwayLength;
+      let runZ = RUNWAY_Z - accelCurve * runwayLength;
 
-      const liftProgress = Math.max(0, (progress - 0.6) / 0.4);
-      const liftEased = liftProgress * liftProgress;
+      if (postTakeoffTime > 0) {
+        const continueSpeed = 2 * runwayLength / TAKEOFF_DURATION;
+        runZ -= postTakeoffTime * continueSpeed * 0.5;
+      }
+
+      const liftProgress = Math.max(0, (progress - 0.5) / 0.5);
+      const liftEased = liftProgress * liftProgress * (3 - 2 * liftProgress);
       const groundY = -0.5;
-      const flyY = airplaneBaseY + 4;
+      const flyY = airplaneBaseY + 3;
       const currentY = groundY + (flyY - groundY) * liftEased;
+      const climbExtra = postTakeoffTime > 0 ? Math.min(postTakeoffTime * 0.5, 1.5) : 0;
 
       airplane.position.x += (0 - airplane.position.x) * 0.1;
       airplane.position.z = runZ;
-      airplane.position.y = currentY;
+      airplane.position.y = currentY + climbExtra;
 
-      const noseUp = liftProgress * 0.12;
+      const noseUp = liftEased * 0.08 + (postTakeoffTime > 0 ? 0.02 : 0);
       airplane.rotation.x = -noseUp;
       airplane.rotation.y = Math.PI;
       airplane.rotation.z *= 0.95;
 
       if (runwayModel) {
         runwayModel.visible = true;
+        if (airplane.position.z < RUNWAY_Z - 30) runwayModel.visible = false;
       }
 
       recycleCityBuildings(runZ);
 
-      if (progress >= 1 && gameState === 'takeoff') {
-        gameState = 'transitioning';
+      if (progress >= 0.85 && !serverStartRequested) {
+        serverStartRequested = true;
         fetch('/api/game/start', { method: 'POST' })
           .then(r => r.json())
           .then(data => {
             if (data.error) {
               gameState = 'idle';
+              serverStartRequested = false;
               updateBalance(balance + currentBet);
               setButtonState('bet');
               return;
             }
-            startTime = data.startTime;
-            gameState = 'flying';
-            flySpeedRamp = 0;
-            generateFlightPath();
-            flightPath.startZ = airplane.position.z;
-            flightPath.startX = airplane.position.x;
-            flightPath.weaveTargetX = airplane.position.x;
-            setButtonState('cashout');
-            runGameLoop();
+            serverStartData = data;
           })
           .catch(() => {
             gameState = 'idle';
+            serverStartRequested = false;
             updateBalance(balance + currentBet);
             setButtonState('bet');
           });
+      }
+
+      if (progress >= 1 && gameState === 'takeoff') {
+        gameState = 'transitioning';
+      }
+
+      if (gameState === 'transitioning' && serverStartData) {
+        startTime = serverStartData.startTime;
+        gameState = 'flying';
+        flySpeedRamp = 0.3;
+        generateFlightPath();
+        flightPath.startZ = airplane.position.z;
+        flightPath.startX = airplane.position.x;
+        flightPath.weaveTargetX = airplane.position.x;
+        playEngineSound();
+        setButtonState('cashout');
+        runGameLoop();
+        serverStartData = null;
       }
     } else {
       airplane.position.x += (0 - airplane.position.x) * 0.05;
@@ -1210,6 +1232,8 @@ function startTakeoff() {
   takeoffStartTime = Date.now();
   currentMultiplier = 1.00;
   flySpeedRamp = 0;
+  serverStartRequested = false;
+  serverStartData = null;
   prevCamTarget = null;
   camObstructionOffset.set(0, 0, 0);
 
@@ -1358,6 +1382,8 @@ function resetForNewRound() {
   flightPath = null;
   crashTarget = null;
   flySpeedRamp = 0;
+  serverStartRequested = false;
+  serverStartData = null;
   prevCamTarget = null;
   camObstructionOffset.set(0, 0, 0);
 
