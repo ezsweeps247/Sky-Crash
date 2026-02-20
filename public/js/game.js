@@ -20,6 +20,7 @@ let smokeParticles = [];
 let cityGroup;
 let tickPending = false;
 let buildingPositions = [];
+let corridorBuildings = [];
 let flightPath = null;
 let crashTarget = null;
 let crashAnimStart = 0;
@@ -109,37 +110,40 @@ function createProceduralCity() {
     new THREE.MeshStandardMaterial({ color: 0x1a1a3e, emissive: 0x0a0a20, roughness: 0.7, metalness: 0.3 })
   ];
 
-  for (let i = 0; i < 30; i++) {
-    const width = 2 + Math.random() * 3;
-    const height = 6 + Math.random() * 18;
-    const depth = 2 + Math.random() * 3;
+  corridorBuildings = [];
+  for (let i = 0; i < 25; i++) {
+    const width = 3 + Math.random() * 4;
+    const height = 8 + Math.random() * 18;
+    const depth = 3 + Math.random() * 4;
     const geometry = new THREE.BoxGeometry(width, height, depth);
     const material = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
     const building = new THREE.Mesh(geometry, material);
 
     const side = (i % 2 === 0) ? -1 : 1;
-    const x = side * (4 + Math.random() * 5);
-    const z = -5 - i * 4 + (Math.random() - 0.5) * 2;
+    const x = side * (8 + Math.random() * 4);
+    const z = -8 - i * 5;
     building.position.set(x, height / 2 - 2, z);
     building.castShadow = true;
     building.receiveShadow = true;
     cityGroup.add(building);
-    buildingPositions.push({ x: x, y: height / 2 - 2, z: z, height: height, width: width, depth: depth });
+    const bData = { x: x, y: height / 2 - 2, z: z, height: height, width: width, depth: depth, side: side };
+    buildingPositions.push(bData);
+    corridorBuildings.push(bData);
 
     addWindowLights(building, width, height, depth, x, z);
   }
 
   for (let side = 0; side < 2; side++) {
-    for (let i = 0; i < 20; i++) {
-      const width = 1.5 + Math.random() * 3;
-      const height = 4 + Math.random() * 14;
-      const depth = 1.5 + Math.random() * 3;
+    for (let i = 0; i < 25; i++) {
+      const width = 2 + Math.random() * 4;
+      const height = 5 + Math.random() * 16;
+      const depth = 2 + Math.random() * 4;
       const geometry = new THREE.BoxGeometry(width, height, depth);
       const material = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
       const building = new THREE.Mesh(geometry, material);
 
-      const x = side === 0 ? -12 - Math.random() * 15 : 12 + Math.random() * 15;
-      const z = -2 - i * 6 + (Math.random() - 0.5) * 3;
+      const x = side === 0 ? -16 - Math.random() * 12 : 16 + Math.random() * 12;
+      const z = -2 - i * 5 + (Math.random() - 0.5) * 3;
       building.position.set(x, height / 2 - 2, z);
       building.castShadow = true;
       cityGroup.add(building);
@@ -156,20 +160,21 @@ function generateFlightPath() {
   const speed = 0.5 + Math.random() * 0.3;
   const startX = (Math.random() - 0.5) * 2;
   const startZ = 8 + Math.random() * 3;
-  const flyDir = Math.random() > 0.5 ? 1 : -1;
-  const climbRate = 0.06 + Math.random() * 0.08;
-  const bankAmplitude = 0.25 + Math.random() * 0.15;
+  const climbRate = 0.04 + Math.random() * 0.06;
+  const bankAmplitude = 0.3 + Math.random() * 0.15;
 
-  const weavePoints = [];
-  for (let i = 0; i < 20; i++) {
-    const side = (i % 2 === 0) ? -1 : 1;
-    weavePoints.push({
-      x: side * (3 + Math.random() * 3),
-      z: -8 - i * 6
-    });
+  const sorted = corridorBuildings.slice().sort((a, b) => b.z - a.z);
+
+  const weavePoints = [{ x: startX, z: startZ }];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const b = sorted[i];
+    const safeDist = (b.width / 2) + 3;
+    const dodgeX = b.side === -1 ? safeDist : -safeDist;
+    weavePoints.push({ x: dodgeX, z: b.z });
   }
 
-  flightPath = { speed, startX, startZ, climbRate, bankAmplitude, flyDir, weavePoints };
+  flightPath = { speed, startX, startZ, climbRate, bankAmplitude, weavePoints };
 }
 
 function pickCrashTarget() {
@@ -574,7 +579,7 @@ function animate() {
         }
       }
 
-      airplane.position.x += (targetX - airplane.position.x) * 0.08;
+      airplane.position.x += (targetX - airplane.position.x) * 0.12;
       airplane.position.y = airplaneBaseY + bobAmount + heightGain;
       airplane.position.z = currentZ;
 
