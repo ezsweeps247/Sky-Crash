@@ -31,6 +31,8 @@ let resetFadeIn = 0;
 let camLerpFactor = 0.03;
 let camTargetLerp = 0.03;
 let prevCamTarget = null;
+let camObstructionOffset = new THREE.Vector3(0, 0, 0);
+const camRaycaster = new THREE.Raycaster();
 const CITY_SEGMENT_LENGTH = 10;
 const CITY_RECYCLE_BEHIND = 30;
 const CITY_GENERATE_AHEAD = 120;
@@ -734,6 +736,30 @@ function animate() {
     camTargetLerp = 0.035;
   }
 
+  if (airplane && cityGroup) {
+    const desiredCamPos = new THREE.Vector3(targetCamX, targetCamY, targetCamZ);
+    const toPlane = new THREE.Vector3().subVectors(planePos, desiredCamPos);
+    const dist = toPlane.length();
+    camRaycaster.set(desiredCamPos, toPlane.normalize());
+    camRaycaster.far = dist;
+    camRaycaster.near = 0.1;
+
+    const hits = camRaycaster.intersectObjects(cityGroup.children, true);
+    const blocked = hits.some(h => h.distance < dist - 1.0);
+
+    if (blocked) {
+      camObstructionOffset.y += (8 - camObstructionOffset.y) * 0.08;
+      camObstructionOffset.x += (-camOffsetX * 0.4 - camObstructionOffset.x) * 0.06;
+    } else {
+      camObstructionOffset.x += (0 - camObstructionOffset.x) * 0.04;
+      camObstructionOffset.y += (0 - camObstructionOffset.y) * 0.04;
+    }
+
+    targetCamX += camObstructionOffset.x;
+    targetCamY += camObstructionOffset.y;
+    targetCamZ += camObstructionOffset.z;
+  }
+
   if (cameraShake > 0) {
     targetCamX += (Math.random() - 0.5) * cameraShake;
     targetCamY += (Math.random() - 0.5) * cameraShake;
@@ -905,6 +931,7 @@ async function beginFlying() {
   currentMultiplier = 1.00;
   flySpeedRamp = 0;
   prevCamTarget = null;
+  camObstructionOffset.set(0, 0, 0);
   generateFlightPath();
 
   if (airplane) {
@@ -1050,6 +1077,7 @@ function resetForNewRound() {
   crashTarget = null;
   flySpeedRamp = 0;
   prevCamTarget = null;
+  camObstructionOffset.set(0, 0, 0);
 
   for (let i = activeExplosions.length - 1; i >= 0; i--) {
     scene.remove(activeExplosions[i]);
