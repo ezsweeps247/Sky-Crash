@@ -135,6 +135,10 @@
       "uri": "scene.bin"
     }
   ],
+  "extensionsUsed": [
+    "KHR_materials_unlit",
+    "KHR_materials_emissive_strength"
+  ],
   "images": [
     {
       "uri": "textures/material_0_baseColor.png"
@@ -154,6 +158,12 @@
       ],
       "emissiveTexture": {
         "index": 1
+      },
+      "extensions": {
+        "KHR_materials_emissive_strength": {
+          "emissiveStrength": 4.495819378789069
+        },
+        "KHR_materials_unlit": {}
       },
       "name": "material_0",
       "pbrMetallicRoughness": {

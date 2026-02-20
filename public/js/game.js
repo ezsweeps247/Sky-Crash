@@ -323,6 +323,11 @@ function loadModels() {
       if (child.isMesh && child.material) {
         child.material.transparent = true;
         child.material.depthWrite = false;
+        child.material.blending = THREE.AdditiveBlending;
+        child.material.side = THREE.DoubleSide;
+        if (child.material.emissiveMap) {
+          child.material.emissiveIntensity = 4.5;
+        }
       }
     });
     console.log('Explosion GLTF model loaded');
