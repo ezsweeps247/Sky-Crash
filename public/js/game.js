@@ -115,11 +115,27 @@ function createProceduralCity() {
   cityBuildingMeshes = [];
 
   buildingMaterials = [
-    new THREE.MeshStandardMaterial({ color: 0x1a1a2e, emissive: 0x0a0a15, roughness: 0.8, metalness: 0.3 }),
-    new THREE.MeshStandardMaterial({ color: 0x16213e, emissive: 0x080818, roughness: 0.7, metalness: 0.4 }),
-    new THREE.MeshStandardMaterial({ color: 0x0f3460, emissive: 0x050520, roughness: 0.6, metalness: 0.5 }),
-    new THREE.MeshStandardMaterial({ color: 0x1a1a3e, emissive: 0x0a0a20, roughness: 0.7, metalness: 0.3 })
+    new THREE.MeshStandardMaterial({ color: 0x2c3e50, emissive: 0x0a1520, roughness: 0.4, metalness: 0.7 }),
+    new THREE.MeshStandardMaterial({ color: 0x34495e, emissive: 0x0c1825, roughness: 0.35, metalness: 0.75 }),
+    new THREE.MeshStandardMaterial({ color: 0x1a2634, emissive: 0x080e18, roughness: 0.5, metalness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: 0x4a6274, emissive: 0x101820, roughness: 0.3, metalness: 0.8 }),
+    new THREE.MeshStandardMaterial({ color: 0x3d5a6e, emissive: 0x0e1a25, roughness: 0.35, metalness: 0.7 }),
+    new THREE.MeshStandardMaterial({ color: 0x546e7a, emissive: 0x121e28, roughness: 0.3, metalness: 0.85 }),
+    new THREE.MeshStandardMaterial({ color: 0x37474f, emissive: 0x0a1218, roughness: 0.45, metalness: 0.65 }),
+    new THREE.MeshStandardMaterial({ color: 0x455a64, emissive: 0x0e1820, roughness: 0.35, metalness: 0.75 }),
+    new THREE.MeshStandardMaterial({ color: 0x263238, emissive: 0x080c10, roughness: 0.5, metalness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: 0x5c7a8a, emissive: 0x142028, roughness: 0.25, metalness: 0.9 }),
   ];
+
+  const groundGeo = new THREE.PlaneGeometry(200, 800);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x1a1a1a, roughness: 0.7, metalness: 0.3,
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.set(0, -2, -200);
+  ground.receiveShadow = true;
+  cityGroup.add(ground);
 
   for (let z = 10; z > -CITY_GENERATE_AHEAD; z -= CITY_SEGMENT_LENGTH) {
     spawnCitySegment(z);
@@ -252,30 +268,68 @@ function pickCrashTarget() {
   crashAnimStart = Date.now();
 }
 
+const windowColors = [
+  0xffeebb, 0xffdd88, 0xffe4a0, 0xfff3cc,
+  0x88ccff, 0x66aaee, 0x99ddff, 0xaaddff,
+  0xffffff, 0xeeeeff, 0xddeeff,
+  0xff9944, 0xffbb66,
+];
+const windowOffColor = 0x1a1a22;
+
 function addWindowLightsToGroup(group, bWidth, bHeight, bDepth, bx, bz) {
-  const windowSize = 0.15;
-  const windowMat = new THREE.MeshBasicMaterial({ color: 0xffee88 });
-  const windowMatBlue = new THREE.MeshBasicMaterial({ color: 0x44aaff });
-  const windowGeom = new THREE.PlaneGeometry(windowSize, windowSize * 1.5);
+  const floorH = 0.9;
+  const colW = 0.6;
+  const winW = 0.35;
+  const winH = 0.5;
+  const floors = Math.max(1, Math.floor(bHeight / floorH) - 1);
+  const cols = Math.max(1, Math.floor(bWidth / colW) - 1);
+  const windowGeom = new THREE.PlaneGeometry(winW, winH);
 
-  const floors = Math.floor(bHeight / 1.2);
-  const cols = Math.floor(bWidth / 0.8);
+  const litChance = 0.45 + Math.random() * 0.25;
+  const tint = windowColors[Math.floor(Math.random() * windowColors.length)];
+  const litMat = new THREE.MeshBasicMaterial({ color: tint });
+  const dimMat = new THREE.MeshBasicMaterial({ color: windowOffColor });
 
-  for (let f = 0; f < floors; f++) {
-    for (let c = 0; c < cols; c++) {
-      if (Math.random() > 0.4) continue;
-      const mat = Math.random() > 0.3 ? windowMat : windowMatBlue;
-      const win = new THREE.Mesh(windowGeom, mat);
-      const wx = (c - cols / 2) * 0.8 + 0.4;
-      const wy = f * 1.2 - bHeight / 2 + 1;
-      if (Math.random() > 0.5) {
-        win.position.set(bx + wx, wy + bHeight / 2 - 1, bz + bDepth / 2 + 0.01);
-      } else {
-        win.position.set(bx + wx, wy + bHeight / 2 - 1, bz - bDepth / 2 - 0.01);
-        win.rotation.y = Math.PI;
+  const faces = [
+    { axis: 'z', offset: bDepth / 2 + 0.02, rotY: 0, spanAxis: 'x', span: bWidth, colCount: cols },
+    { axis: 'z', offset: -(bDepth / 2 + 0.02), rotY: Math.PI, spanAxis: 'x', span: bWidth, colCount: cols },
+    { axis: 'x', offset: bWidth / 2 + 0.02, rotY: Math.PI / 2, spanAxis: 'z', span: bDepth, colCount: Math.max(1, Math.floor(bDepth / colW) - 1) },
+    { axis: 'x', offset: -(bWidth / 2 + 0.02), rotY: -Math.PI / 2, spanAxis: 'z', span: bDepth, colCount: Math.max(1, Math.floor(bDepth / colW) - 1) },
+  ];
+
+  for (const face of faces) {
+    for (let f = 0; f < floors; f++) {
+      for (let c = 0; c < face.colCount; c++) {
+        if (Math.random() > 0.6) continue;
+        const lit = Math.random() < litChance;
+        const mat = lit ? litMat : dimMat;
+        const win = new THREE.Mesh(windowGeom, mat);
+        const spanPos = (c - face.colCount / 2) * colW + colW / 2;
+        const wy = f * floorH - bHeight / 2 + floorH + 0.3;
+        if (face.axis === 'z') {
+          win.position.set(bx + spanPos, wy + bHeight / 2 - 1, bz + face.offset);
+        } else {
+          win.position.set(bx + face.offset, wy + bHeight / 2 - 1, bz + spanPos);
+        }
+        win.rotation.y = face.rotY;
+        group.add(win);
       }
-      group.add(win);
     }
+  }
+
+  if (bHeight > 12 && Math.random() > 0.4) {
+    const antennaH = 1 + Math.random() * 2;
+    const antennaGeo = new THREE.CylinderGeometry(0.03, 0.05, antennaH, 4);
+    const antennaMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.9, roughness: 0.2 });
+    const antenna = new THREE.Mesh(antennaGeo, antennaMat);
+    antenna.position.set(bx, bHeight / 2 - 2 + bHeight / 2 + antennaH / 2, bz);
+    group.add(antenna);
+
+    const beaconGeo = new THREE.SphereGeometry(0.08, 6, 6);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+    beacon.position.set(bx, bHeight / 2 - 2 + bHeight / 2 + antennaH, bz);
+    group.add(beacon);
   }
 }
 
