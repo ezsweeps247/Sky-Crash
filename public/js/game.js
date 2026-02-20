@@ -1201,6 +1201,10 @@ async function placeBet() {
     document.getElementById('status-msg').textContent = 'Enter a valid bet amount';
     return;
   }
+  if (betAmount > 100) {
+    document.getElementById('status-msg').textContent = 'Max bet is 100';
+    return;
+  }
   if (betAmount > balance) {
     document.getElementById('status-msg').textContent = 'Insufficient balance';
     return;
