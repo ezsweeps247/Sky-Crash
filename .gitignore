@@ -2,3 +2,9 @@ node_modules/
 .env
 *.log
 .DS_Store
+.cache/
+.config/
+.upm/
+.replit
+replit.nix
+.breakpoints

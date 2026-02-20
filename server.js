@@ -1,6 +1,7 @@
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
+const { Pool } = require('pg');
 
 const app = express();
 app.use(express.json());
@@ -10,7 +11,41 @@ app.use(express.static('public', {
   }
 }));
 
+const PORT = process.env.PORT || 5000;
 const SALT = 'sky-crash-provably-fair-v1';
+
+let db = null;
+
+async function initDatabase() {
+  if (!process.env.DATABASE_URL) {
+    console.log('No DATABASE_URL found - running without database (in-memory only)');
+    return;
+  }
+
+  try {
+    db = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS game_history (
+        id SERIAL PRIMARY KEY,
+        round_id VARCHAR(50) UNIQUE NOT NULL,
+        crash_point DECIMAL(10,2) NOT NULL,
+        hash VARCHAR(64) NOT NULL,
+        commitment VARCHAR(64) NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    console.log('Database connected and tables ready (Neon)');
+  } catch (err) {
+    console.error('Database connection failed:', err.message);
+    console.log('Falling back to in-memory mode');
+    db = null;
+  }
+}
 
 const gameState = {
   currentRound: null,
@@ -46,6 +81,36 @@ function initializeGame() {
   gameState.hashChain = generateHashChain(gameState.serverSeed, 10000);
   gameState.chainIndex = 0;
   gameState.chainHead = gameState.hashChain[0];
+}
+
+async function saveRoundToDb(round) {
+  if (!db) return;
+  try {
+    await db.query(
+      `INSERT INTO game_history (round_id, crash_point, hash, commitment)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (round_id) DO NOTHING`,
+      [round.id, round.crashPoint, round.hash, round.commitment]
+    );
+  } catch (err) {
+    console.error('Failed to save round to DB:', err.message);
+  }
+}
+
+async function loadHistoryFromDb() {
+  if (!db) return;
+  try {
+    const result = await db.query(
+      `SELECT round_id as id, crash_point as "crashPoint", hash, commitment
+       FROM game_history ORDER BY created_at DESC LIMIT 50`
+    );
+    gameState.history = result.rows.map(r => ({
+      ...r,
+      crashPoint: parseFloat(r.crashPoint)
+    }));
+  } catch (err) {
+    console.error('Failed to load history from DB:', err.message);
+  }
 }
 
 initializeGame();
@@ -99,7 +164,7 @@ app.post('/api/game/start', (req, res) => {
   });
 });
 
-app.post('/api/game/tick', (req, res) => {
+app.post('/api/game/tick', async (req, res) => {
   if (!gameState.currentRound || gameState.currentRound.status !== 'flying') {
     return res.json({ status: 'idle', crashed: false });
   }
@@ -112,13 +177,17 @@ app.post('/api/game/tick', (req, res) => {
     gameState.currentRound.status = 'crashed';
     const round = { ...gameState.currentRound };
 
-    gameState.history.unshift({
+    const historyEntry = {
       id: round.id,
       crashPoint: round.crashPoint,
       hash: round.hash,
       commitment: round.commitment
-    });
+    };
+
+    gameState.history.unshift(historyEntry);
     if (gameState.history.length > 50) gameState.history.pop();
+
+    await saveRoundToDb(round);
 
     gameState.currentRound = null;
 
@@ -182,7 +251,17 @@ app.get('/api/game/history', (req, res) => {
   res.json(gameState.history);
 });
 
-const PORT = 5000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Crash game server running on port ${PORT}`);
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+async function startServer() {
+  await initDatabase();
+  await loadHistoryFromDb();
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Crash game server running on port ${PORT}`);
+  });
+}
+
+startServer();

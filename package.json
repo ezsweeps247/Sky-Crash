@@ -7,7 +7,12 @@
     "start": "node server.js",
     "dev": "node server.js"
   },
-  "keywords": ["crash-game", "threejs", "3d", "provably-fair"],
+  "keywords": [
+    "crash-game",
+    "threejs",
+    "3d",
+    "provably-fair"
+  ],
   "license": "ISC",
   "dependencies": {
     "express": "^5.2.1",
