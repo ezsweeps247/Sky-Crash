@@ -1,6 +1,7 @@
 let scene, camera, renderer, airplane, cityModels = [];
 let engineSound, explosionSound;
 let explosionModel = null;
+let runwayModel = null;
 let activeExplosions = [];
 let gameLoop = null;
 let currentMultiplier = 1.00;
@@ -28,6 +29,9 @@ let crashAnimStart = 0;
 let citySegmentZ = 0;
 let flySpeedRamp = 0;
 let resetFadeIn = 0;
+let takeoffStartTime = 0;
+const TAKEOFF_DURATION = 3.5;
+const RUNWAY_Z = 60;
 let camLerpFactor = 0.03;
 let camTargetLerp = 0.03;
 let prevCamTarget = null;
@@ -372,6 +376,22 @@ function loadModels() {
     createAirplane();
   });
 
+  loader.load('/models/runway/scene.gltf', (gltf) => {
+    runwayModel = gltf.scene;
+    runwayModel.scale.set(14, 14, 14);
+    runwayModel.rotation.y = Math.PI / 2;
+    runwayModel.position.set(0, -1.95, RUNWAY_Z);
+    runwayModel.traverse((child) => {
+      if (child.isMesh) {
+        child.receiveShadow = true;
+      }
+    });
+    scene.add(runwayModel);
+    console.log('Runway GLTF model loaded');
+  }, undefined, (error) => {
+    console.warn('Could not load runway GLTF:', error);
+  });
+
   loader.load('/models/explosion/scene.gltf', (gltf) => {
     explosionModel = gltf.scene;
     explosionModel.traverse((child) => {
@@ -673,6 +693,9 @@ function animate() {
 
   if (airplane) {
     if (gameState === 'flying' && flightPath) {
+      if (runwayModel && airplane.position.z < RUNWAY_Z - 30) {
+        runwayModel.visible = false;
+      }
       const flyTime = (Date.now() - startTime) / 1000;
       const fp = flightPath;
       const speedMultiplier = easeInOut(flySpeedRamp);
@@ -784,39 +807,76 @@ function animate() {
           airplane.rotation.z += 0.03;
         }
       }
-    } else {
-      const idleSpeed = 0.3;
-      const idleZ = 5 - animTime * idleSpeed;
-      const bobAmount = Math.sin(animTime * 1.5) * 0.15;
-      let weaveX = Math.sin(animTime * 0.25) * 3.5;
-      const idleSafeMargin = 2.5;
+    } else if (gameState === 'takeoff') {
+      const t = (Date.now() - takeoffStartTime) / 1000;
+      const progress = Math.min(t / TAKEOFF_DURATION, 1);
 
-      const idleNearby = corridorBuildings.filter(b =>
-        b.z > idleZ - 25 && b.z < idleZ + 5
-      );
-      for (const b of idleNearby) {
-        const dz = Math.abs(idleZ - b.z);
-        if (dz < 12) {
-          const bLeft = b.x - b.width / 2 - idleSafeMargin;
-          const bRight = b.x + b.width / 2 + idleSafeMargin;
-          if (weaveX > bLeft && weaveX < bRight) {
-            weaveX = b.x > 0 ? bLeft - 1.5 : bRight + 1.5;
-          }
-        }
+      const accelCurve = progress * progress;
+      const runwayLength = RUNWAY_Z + 20;
+      const runZ = RUNWAY_Z - accelCurve * runwayLength;
+
+      const liftProgress = Math.max(0, (progress - 0.6) / 0.4);
+      const liftEased = liftProgress * liftProgress;
+      const groundY = -0.5;
+      const flyY = airplaneBaseY + 4;
+      const currentY = groundY + (flyY - groundY) * liftEased;
+
+      airplane.position.x += (0 - airplane.position.x) * 0.1;
+      airplane.position.z = runZ;
+      airplane.position.y = currentY;
+
+      const noseUp = liftProgress * 0.12;
+      airplane.rotation.x = -noseUp;
+      airplane.rotation.y = Math.PI;
+      airplane.rotation.z *= 0.95;
+
+      if (runwayModel) {
+        runwayModel.visible = true;
       }
-      weaveX = Math.max(-5.0, Math.min(5.0, weaveX));
 
-      airplane.position.x += (weaveX - airplane.position.x) * 0.08;
-      airplane.position.z = idleZ;
-      airplane.position.y = airplaneBaseY + 3 + bobAmount;
+      recycleCityBuildings(runZ);
 
-      const dx = weaveX - airplane.position.x;
-      const idleBank = Math.max(-0.2, Math.min(0.2, dx * 0.1));
-      airplane.rotation.z += (idleBank - airplane.rotation.z) * 0.04;
-      airplane.rotation.y = Math.PI + airplane.rotation.z * 0.2;
-      airplane.rotation.x = Math.sin(animTime * 0.8) * 0.02;
+      if (progress >= 1 && gameState === 'takeoff') {
+        gameState = 'transitioning';
+        fetch('/api/game/start', { method: 'POST' })
+          .then(r => r.json())
+          .then(data => {
+            if (data.error) {
+              gameState = 'idle';
+              updateBalance(balance + currentBet);
+              setButtonState('bet');
+              return;
+            }
+            startTime = data.startTime;
+            gameState = 'flying';
+            flySpeedRamp = 0;
+            generateFlightPath();
+            flightPath.startZ = airplane.position.z;
+            flightPath.startX = airplane.position.x;
+            flightPath.weaveTargetX = airplane.position.x;
+            setButtonState('cashout');
+            runGameLoop();
+          })
+          .catch(() => {
+            gameState = 'idle';
+            updateBalance(balance + currentBet);
+            setButtonState('bet');
+          });
+      }
+    } else {
+      airplane.position.x += (0 - airplane.position.x) * 0.05;
+      airplane.position.z += (RUNWAY_Z - airplane.position.z) * 0.03;
+      airplane.position.y += (-0.5 - airplane.position.y) * 0.05;
 
-      recycleCityBuildings(idleZ);
+      airplane.rotation.x *= 0.95;
+      airplane.rotation.z *= 0.95;
+      airplane.rotation.y += (Math.PI - airplane.rotation.y) * 0.05;
+
+      if (runwayModel) {
+        runwayModel.visible = true;
+      }
+
+      recycleCityBuildings(airplane.position.z);
     }
   }
 
@@ -829,7 +889,14 @@ function animate() {
   let targetCamY = planePos.y + camOffsetY - 2;
   let targetCamZ = planePos.z + camOffsetZ;
 
-  if (gameState === 'flying' && airplane) {
+  if (gameState === 'takeoff') {
+    const t = (Date.now() - takeoffStartTime) / 1000;
+    const progress = Math.min(t / TAKEOFF_DURATION, 1);
+    targetCamX = planePos.x + 6 - progress * 2;
+    targetCamY = planePos.y + 4 + progress * 5;
+    targetCamZ = planePos.z + 14 + progress * 4;
+    camTargetLerp = 0.05;
+  } else if (gameState === 'flying' && airplane) {
     const t = (Date.now() - startTime) / 1000;
     targetCamX += Math.sin(t * 0.15) * 1.5 * easeInOut(flySpeedRamp);
     targetCamY += Math.sin(t * 0.25) * 0.5 * easeInOut(flySpeedRamp);
@@ -837,6 +904,9 @@ function animate() {
   } else if (gameState === 'crashed') {
     camTargetLerp = 0.025;
   } else {
+    targetCamX = planePos.x + 6;
+    targetCamY = planePos.y + 5;
+    targetCamZ = planePos.z + 14;
     camTargetLerp = 0.035;
   }
 
@@ -987,6 +1057,7 @@ async function handleAction() {
   } else if (gameState === 'flying' && !cashedOut) {
     await cashOut();
   }
+  // Ignore during takeoff/transitioning/crashed states
 }
 
 async function placeBet() {
@@ -1016,39 +1087,33 @@ async function placeBet() {
 
   setButtonState('waiting');
   updateMultiplierDisplay(0, 'waiting');
-  document.getElementById('multiplier-text').textContent = 'STARTING...';
+  document.getElementById('multiplier-text').textContent = 'TAKING OFF...';
 
-  setTimeout(async () => {
-    await beginFlying();
-  }, 1500);
+  startTakeoff();
 }
 
-async function beginFlying() {
-  try {
-    const res = await fetch('/api/game/start', { method: 'POST' });
-    const data = await res.json();
-    if (data.error) return;
-    startTime = data.startTime;
-  } catch (e) { return; }
-
-  gameState = 'flying';
+function startTakeoff() {
+  gameState = 'takeoff';
+  takeoffStartTime = Date.now();
   currentMultiplier = 1.00;
   flySpeedRamp = 0;
   prevCamTarget = null;
   camObstructionOffset.set(0, 0, 0);
-  generateFlightPath();
 
   if (airplane) {
-    flightPath.startZ = airplane.position.z;
-    flightPath.startX = airplane.position.x;
-    flightPath.weaveTargetX = airplane.position.x;
     airplane.visible = true;
-    airplaneCurrentBank = airplane.rotation.z;
+    airplane.position.set(0, -0.5, RUNWAY_Z);
+    airplane.rotation.set(0, Math.PI, 0);
+    airplaneCurrentBank = 0;
+    airplane.traverse(child => {
+      if (child.isMesh && child.material) {
+        child.material.transparent = false;
+        child.material.opacity = 1;
+      }
+    });
   }
 
   playEngineSound();
-  setButtonState('cashout');
-  runGameLoop();
 }
 
 function runGameLoop() {
@@ -1199,6 +1264,10 @@ function resetForNewRound() {
         child.material.opacity = 0;
       }
     });
+  }
+
+  if (runwayModel) {
+    runwayModel.visible = true;
   }
 
   updateMultiplierDisplay(0, 'idle');

@@ -44,8 +44,9 @@ public/
 - Building metadata arrays (buildingPositions, corridorBuildings) stay in sync with rendered segments
 
 ## Flight System
-- Idle: Plane flies forward slowly through city, gentle weaving
-- Flying: Plane flies faster, dynamically dodges nearest corridor buildings
+- Idle: Plane sits on runway, awaiting bet
+- Takeoff: Plane accelerates down runway and lifts off (3.5 second sequence)
+- Flying: Plane flies through city, dynamically dodges corridor buildings
 - Crashed: Plane nosedives into nearest tall building, explosion at impact
 - Camera follows plane at all times with smooth tracking
 
@@ -67,4 +68,5 @@ public/
 
 ## 3D Model Credits (CC-BY-4.0)
 - Airplane: "boeing 707 (burnout 3)" by amogusstrikesback2
+- Runway: "RUNWAY" by pranav27
 - Explosion: "Sparks/explosion" by OPREXT
