@@ -376,21 +376,7 @@ function loadModels() {
     createAirplane();
   });
 
-  loader.load('/models/runway/scene.gltf', (gltf) => {
-    runwayModel = gltf.scene;
-    runwayModel.scale.set(14, 14, 14);
-    runwayModel.rotation.y = Math.PI / 2;
-    runwayModel.position.set(0, -1.95, RUNWAY_Z);
-    runwayModel.traverse((child) => {
-      if (child.isMesh) {
-        child.receiveShadow = true;
-      }
-    });
-    scene.add(runwayModel);
-    console.log('Runway GLTF model loaded');
-  }, undefined, (error) => {
-    console.warn('Could not load runway GLTF:', error);
-  });
+  createProceduralRunway();
 
   loader.load('/models/explosion/scene.gltf', (gltf) => {
     explosionModel = gltf.scene;
@@ -501,6 +487,133 @@ function createAirplane() {
   airplane.rotation.y = Math.PI;
   airplane.scale.set(1.2, 1.2, 1.2);
   scene.add(airplane);
+}
+
+function createProceduralRunway() {
+  runwayModel = new THREE.Group();
+
+  const runwayLength = 80;
+  const runwayWidth = 6;
+
+  const asphaltGeo = new THREE.PlaneGeometry(runwayWidth, runwayLength);
+  const asphaltMat = new THREE.MeshStandardMaterial({
+    color: 0x2a2a2a,
+    roughness: 0.85,
+    metalness: 0.1,
+  });
+  const asphalt = new THREE.Mesh(asphaltGeo, asphaltMat);
+  asphalt.rotation.x = -Math.PI / 2;
+  asphalt.receiveShadow = true;
+  runwayModel.add(asphalt);
+
+  const edgeMat = new THREE.MeshStandardMaterial({
+    color: 0xdddddd,
+    emissive: 0x444444,
+    emissiveIntensity: 0.3,
+    roughness: 0.5,
+  });
+
+  for (let side = -1; side <= 1; side += 2) {
+    const edgeGeo = new THREE.PlaneGeometry(0.15, runwayLength);
+    const edge = new THREE.Mesh(edgeGeo, edgeMat);
+    edge.rotation.x = -Math.PI / 2;
+    edge.position.set(side * (runwayWidth / 2 - 0.1), 0.01, 0);
+    edge.receiveShadow = true;
+    runwayModel.add(edge);
+  }
+
+  const centerDashMat = new THREE.MeshStandardMaterial({
+    color: 0xeeeeee,
+    emissive: 0x555555,
+    emissiveIntensity: 0.2,
+    roughness: 0.5,
+  });
+  const dashLength = 2;
+  const dashGap = 2;
+  for (let z = -runwayLength / 2 + 2; z < runwayLength / 2 - 2; z += dashLength + dashGap) {
+    const dashGeo = new THREE.PlaneGeometry(0.12, dashLength);
+    const dash = new THREE.Mesh(dashGeo, centerDashMat);
+    dash.rotation.x = -Math.PI / 2;
+    dash.position.set(0, 0.01, z);
+    runwayModel.add(dash);
+  }
+
+  const thresholdMat = new THREE.MeshStandardMaterial({
+    color: 0xeeeeee,
+    emissive: 0x666666,
+    emissiveIntensity: 0.3,
+    roughness: 0.4,
+  });
+  for (let end = -1; end <= 1; end += 2) {
+    for (let i = -3; i <= 3; i++) {
+      const stripeGeo = new THREE.PlaneGeometry(0.35, 3);
+      const stripe = new THREE.Mesh(stripeGeo, thresholdMat);
+      stripe.rotation.x = -Math.PI / 2;
+      stripe.position.set(i * 0.6, 0.01, end * (runwayLength / 2 - 2));
+      runwayModel.add(stripe);
+    }
+  }
+
+  const tdMat = new THREE.MeshStandardMaterial({
+    color: 0xcccccc,
+    emissive: 0x444444,
+    emissiveIntensity: 0.2,
+    roughness: 0.5,
+  });
+  for (let end = -1; end <= 1; end += 2) {
+    for (let side = -1; side <= 1; side += 2) {
+      const tdGeo = new THREE.PlaneGeometry(1.5, 6);
+      const td = new THREE.Mesh(tdGeo, tdMat);
+      td.rotation.x = -Math.PI / 2;
+      td.position.set(side * 1.2, 0.01, end * 12);
+      runwayModel.add(td);
+    }
+  }
+
+  const lightMat = new THREE.MeshStandardMaterial({
+    color: 0xffaa00,
+    emissive: 0xffaa00,
+    emissiveIntensity: 1.5,
+  });
+  const lightGeo = new THREE.SphereGeometry(0.08, 6, 6);
+  for (let side = -1; side <= 1; side += 2) {
+    for (let z = -runwayLength / 2; z <= runwayLength / 2; z += 4) {
+      const light = new THREE.Mesh(lightGeo, lightMat);
+      light.position.set(side * (runwayWidth / 2 + 0.3), 0.05, z);
+      runwayModel.add(light);
+
+      const ptLight = new THREE.PointLight(0xffaa00, 0.15, 3);
+      ptLight.position.copy(light.position);
+      ptLight.position.y = 0.2;
+      runwayModel.add(ptLight);
+    }
+  }
+
+  const approachLightMat = new THREE.MeshStandardMaterial({
+    color: 0x00ff44,
+    emissive: 0x00ff44,
+    emissiveIntensity: 1.5,
+  });
+  for (let i = -3; i <= 3; i++) {
+    const aLight = new THREE.Mesh(lightGeo.clone(), approachLightMat);
+    aLight.position.set(i * 0.8, 0.05, runwayLength / 2 + 1);
+    runwayModel.add(aLight);
+  }
+
+  const endLightMat = new THREE.MeshStandardMaterial({
+    color: 0xff2200,
+    emissive: 0xff2200,
+    emissiveIntensity: 1.5,
+  });
+  for (let i = -3; i <= 3; i++) {
+    const eLight = new THREE.Mesh(lightGeo.clone(), endLightMat);
+    eLight.position.set(i * 0.8, 0.05, -runwayLength / 2 - 1);
+    runwayModel.add(eLight);
+  }
+
+  runwayModel.position.set(0, -1.95, RUNWAY_Z);
+  scene.add(runwayModel);
+  console.log('Procedural runway created');
 }
 
 function initAudio() {
