@@ -109,6 +109,8 @@ function createProceduralCity() {
     new THREE.MeshStandardMaterial({ color: 0x1a1a3e, emissive: 0x0a0a20, roughness: 0.7, metalness: 0.3 })
   ];
 
+  const corridorWidth = 10;
+
   for (let row = 0; row < 5; row++) {
     for (let i = 0; i < 20; i++) {
       const width = 1.5 + Math.random() * 3;
@@ -118,7 +120,10 @@ function createProceduralCity() {
       const material = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
       const building = new THREE.Mesh(geometry, material);
 
-      const x = (i - 10) * 4 + (Math.random() - 0.5) * 2;
+      let x = (i - 10) * 4 + (Math.random() - 0.5) * 2;
+      if (Math.abs(x) < corridorWidth) {
+        x = x > 0 ? corridorWidth + Math.random() * 3 : -corridorWidth - Math.random() * 3;
+      }
       const z = -15 - row * 10 + (Math.random() - 0.5) * 4;
       building.position.set(x, height / 2 - 2, z);
       building.castShadow = true;
@@ -131,16 +136,16 @@ function createProceduralCity() {
   }
 
   for (let side = 0; side < 2; side++) {
-    for (let i = 0; i < 12; i++) {
-      const width = 1 + Math.random() * 2.5;
-      const height = 5 + Math.random() * 20;
-      const depth = 1 + Math.random() * 2.5;
+    for (let i = 0; i < 15; i++) {
+      const width = 1.5 + Math.random() * 3;
+      const height = 8 + Math.random() * 20;
+      const depth = 1.5 + Math.random() * 3;
       const geometry = new THREE.BoxGeometry(width, height, depth);
       const material = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
       const building = new THREE.Mesh(geometry, material);
 
-      const x = side === 0 ? -12 - Math.random() * 8 : 12 + Math.random() * 8;
-      const z = -5 - i * 6 + (Math.random() - 0.5) * 3;
+      const x = side === 0 ? -corridorWidth - 1 - Math.random() * 10 : corridorWidth + 1 + Math.random() * 10;
+      const z = -3 - i * 5 + (Math.random() - 0.5) * 3;
       building.position.set(x, height / 2 - 2, z);
       building.castShadow = true;
       cityGroup.add(building);
@@ -154,15 +159,16 @@ function createProceduralCity() {
 }
 
 function generateFlightPath() {
-  const speed = 0.8 + Math.random() * 0.4;
-  const startX = (Math.random() - 0.5) * 6;
-  const startZ = 5 + Math.random() * 3;
+  const speed = 0.6 + Math.random() * 0.3;
+  const startX = (Math.random() - 0.5) * 4;
+  const startZ = 8 + Math.random() * 3;
   const flyDir = Math.random() > 0.5 ? 1 : -1;
-  const turnRate = (0.3 + Math.random() * 0.4) * flyDir;
-  const climbRate = 0.08 + Math.random() * 0.1;
-  const bankAmplitude = 0.12 + Math.random() * 0.1;
+  const turnRate = (0.2 + Math.random() * 0.3) * flyDir;
+  const climbRate = 0.1 + Math.random() * 0.12;
+  const bankAmplitude = 0.1 + Math.random() * 0.08;
+  const swerveAmount = 3 + Math.random() * 2;
 
-  flightPath = { speed, startX, startZ, turnRate, climbRate, bankAmplitude, flyDir };
+  flightPath = { speed, startX, startZ, turnRate, climbRate, bankAmplitude, flyDir, swerveAmount };
 }
 
 function pickCrashTarget() {
@@ -551,15 +557,17 @@ function animate() {
       const fp = flightPath;
 
       const forwardDist = flyTime * fp.speed;
-      const turnAngle = Math.sin(flyTime * fp.turnRate) * 4;
-      const heightGain = Math.min(flyTime * fp.climbRate, 4);
-      const bobAmount = Math.sin(flyTime * 1.5) * 0.2;
+      const swerve = Math.sin(flyTime * fp.turnRate) * (fp.swerveAmount || 3);
+      const heightGain = Math.min(flyTime * fp.climbRate, 6);
+      const bobAmount = Math.sin(flyTime * 1.5) * 0.15;
 
-      airplane.position.x = fp.startX + turnAngle + Math.sin(flyTime * 0.6) * 2;
+      let planeX = fp.startX + swerve + Math.sin(flyTime * 0.5) * 1.5;
+      planeX = Math.max(-7, Math.min(7, planeX));
+      airplane.position.x = planeX;
       airplane.position.y = airplaneBaseY + bobAmount + heightGain;
       airplane.position.z = fp.startZ - forwardDist;
 
-      const bankTarget = Math.cos(flyTime * fp.turnRate) * fp.turnRate * fp.bankAmplitude + Math.cos(flyTime * 0.6) * 0.08;
+      const bankTarget = Math.cos(flyTime * fp.turnRate) * fp.turnRate * fp.bankAmplitude + Math.cos(flyTime * 0.5) * 0.06;
       airplaneCurrentBank += (bankTarget - airplaneCurrentBank) * 0.05;
       airplane.rotation.z = airplaneCurrentBank;
 
