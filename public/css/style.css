@@ -88,18 +88,20 @@ body {
   font-weight: 900;
   text-shadow: 0 0 40px rgba(0,240,255,0.5), 0 4px 8px rgba(0,0,0,0.5);
   color: #00f0ff;
-  transition: color 0.3s;
+  transition: color 0.5s ease, font-size 0.5s ease, text-shadow 0.5s ease, transform 0.3s ease;
 }
 
 #multiplier-text.crashed {
   color: #ff3b3b;
   text-shadow: 0 0 40px rgba(255,59,59,0.5), 0 4px 8px rgba(0,0,0,0.5);
-  animation: crashShake 0.5s ease-out;
+  animation: crashShake 0.6s ease-out;
+  transform: scale(1.1);
 }
 
 #multiplier-text.waiting {
   font-size: 36px;
   color: #aaa;
+  text-shadow: 0 0 20px rgba(170,170,170,0.3);
 }
 
 @keyframes crashShake {
@@ -325,11 +327,12 @@ body {
   z-index: 100;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.3s;
+  transition: opacity 0.15s ease-in;
 }
 
 #crash-overlay.active {
   opacity: 1;
+  transition: opacity 0.05s ease-in;
 }
 
 .crash-flash {

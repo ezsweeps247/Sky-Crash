@@ -26,6 +26,11 @@ let flightPath = null;
 let crashTarget = null;
 let crashAnimStart = 0;
 let citySegmentZ = 0;
+let flySpeedRamp = 0;
+let resetFadeIn = 0;
+let camLerpFactor = 0.03;
+let camTargetLerp = 0.03;
+let prevCamTarget = null;
 const CITY_SEGMENT_LENGTH = 10;
 const CITY_RECYCLE_BEHIND = 30;
 const CITY_GENERATE_AHEAD = 120;
@@ -574,19 +579,50 @@ function updateParticles() {
 }
 
 let animTime = 0;
+function easeInOut(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; }
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
 function animate() {
   requestAnimationFrame(animate);
-  animTime += 0.016;
+  const dt = 0.016;
+  animTime += dt;
+
+  camLerpFactor += (camTargetLerp - camLerpFactor) * 0.03;
+
+  if (resetFadeIn > 0 && resetFadeIn < 1) {
+    resetFadeIn = Math.min(1, resetFadeIn + dt * 1.2);
+    if (airplane) {
+      airplane.traverse(child => {
+        if (child.isMesh && child.material) {
+          child.material.opacity = resetFadeIn;
+          child.material.transparent = resetFadeIn < 1;
+          if (resetFadeIn >= 1) {
+            child.material.transparent = false;
+            child.material.opacity = 1;
+          }
+        }
+      });
+    }
+  }
+
+  if (flySpeedRamp < 1 && gameState === 'flying') {
+    flySpeedRamp = Math.min(1, flySpeedRamp + dt * 0.5);
+  }
 
   if (airplane) {
     if (gameState === 'flying' && flightPath) {
       const flyTime = (Date.now() - startTime) / 1000;
       const fp = flightPath;
+      const speedMultiplier = easeInOut(flySpeedRamp);
+      const currentSpeed = fp.speed * speedMultiplier;
 
-      const forwardDist = flyTime * fp.speed;
-      const currentZ = fp.startZ - forwardDist;
-      const bobAmount = Math.sin(flyTime * 2) * 0.1;
-      const heightBase = airplaneBaseY + 2 + Math.sin(flyTime * 0.3) * 1.5;
+      const currentZ = fp.startZ - flyTime * (0.1 + currentSpeed * 0.9);
+      const bobAmount = Math.sin(flyTime * 2) * 0.1 * speedMultiplier;
+      const heightBase = airplaneBaseY + 2 + Math.sin(flyTime * 0.3) * 1.5 * speedMultiplier;
+
+      const idleHeight = airplaneBaseY + 3;
+      const flyHeight = heightBase + bobAmount;
+      const blendedHeight = idleHeight + (flyHeight - idleHeight) * speedMultiplier;
 
       const nearbyBuildings = corridorBuildings.filter(b =>
         b.z > currentZ - 15 && b.z < currentZ + 5
@@ -608,46 +644,54 @@ function animate() {
         }
       }
 
-      airplane.position.x += (fp.weaveTargetX - airplane.position.x) * 0.06;
-      airplane.position.y = heightBase + bobAmount;
+      const weaveLerp = 0.03 + 0.04 * speedMultiplier;
+      airplane.position.x += (fp.weaveTargetX - airplane.position.x) * weaveLerp;
+      airplane.position.y = blendedHeight;
       airplane.position.z = currentZ;
 
       recycleCityBuildings(currentZ);
 
       const dx = fp.weaveTargetX - airplane.position.x;
-      const bankTarget = Math.max(-0.4, Math.min(0.4, dx * 0.15));
+      const maxBank = 0.2 + 0.2 * speedMultiplier;
+      const bankTarget = Math.max(-maxBank, Math.min(maxBank, dx * 0.15));
       airplaneCurrentBank += (bankTarget - airplaneCurrentBank) * 0.05;
       airplane.rotation.z = airplaneCurrentBank;
 
-      const pitchOsc = Math.sin(flyTime * 0.7) * 0.03 - 0.02;
+      const pitchOsc = Math.sin(flyTime * 0.7) * 0.03 * speedMultiplier - 0.02 * speedMultiplier;
       airplane.rotation.x = pitchOsc;
-
       airplane.rotation.y = Math.PI + airplaneCurrentBank * 0.25;
 
     } else if (gameState === 'crashed') {
       if (crashTarget && crashTarget.hitPoint) {
         const t = (Date.now() - crashAnimStart) / 1000;
-        const crashDuration = 0.8;
+        const crashDuration = 1.2;
 
         if (t < crashDuration) {
           const progress = Math.min(t / crashDuration, 1);
-          const eased = progress * progress;
+          const eased = easeInOut(progress);
           const startPos = crashTarget.startPos;
           if (startPos) {
             airplane.position.x = startPos.x + (crashTarget.hitPoint.x - startPos.x) * eased;
             airplane.position.y = startPos.y + (crashTarget.hitPoint.y - startPos.y) * eased;
             airplane.position.z = startPos.z + (crashTarget.hitPoint.z - startPos.z) * eased;
-            airplane.rotation.x = -0.3 * eased;
-            airplane.rotation.z += 0.02 * eased;
+            airplane.rotation.x = -0.4 * eased;
+            airplane.rotation.z = airplaneCurrentBank + (Math.PI * 0.15) * eased;
           }
         } else {
-          airplane.visible = false;
+          const fadeT = Math.min((t - crashDuration) / 0.5, 1);
+          airplane.traverse(child => {
+            if (child.isMesh && child.material) {
+              child.material.transparent = true;
+              child.material.opacity = 1 - fadeT;
+            }
+          });
+          if (fadeT >= 1) airplane.visible = false;
         }
       } else {
         if (airplane.position.y > -5) {
-          airplane.position.y -= 0.15;
-          airplane.rotation.x += 0.03;
-          airplane.rotation.z += 0.04;
+          airplane.position.y -= 0.12;
+          airplane.rotation.x += 0.025;
+          airplane.rotation.z += 0.03;
         }
       }
     } else {
@@ -673,30 +717,39 @@ function animate() {
   const camOffsetX = 5;
   const camOffsetY = 10;
   const camOffsetZ = 16;
+  const planePos = airplane ? airplane.position : new THREE.Vector3(0, 2, 0);
 
-  if (cameraShake > 0) {
-    const planePos = airplane ? airplane.position : new THREE.Vector3(0, 2, 0);
-    camera.position.x = planePos.x + camOffsetX + (Math.random() - 0.5) * cameraShake;
-    camera.position.y = planePos.y + camOffsetY - 2 + (Math.random() - 0.5) * cameraShake;
-    camera.position.z = planePos.z + camOffsetZ + (Math.random() - 0.5) * cameraShake;
-    cameraShake *= 0.93;
-    if (cameraShake < 0.01) {
-      cameraShake = 0;
-    }
-  } else if (gameState === 'flying' && airplane) {
+  let targetCamX = planePos.x + camOffsetX;
+  let targetCamY = planePos.y + camOffsetY - 2;
+  let targetCamZ = planePos.z + camOffsetZ;
+
+  if (gameState === 'flying' && airplane) {
     const t = (Date.now() - startTime) / 1000;
-    camera.position.x = airplane.position.x + camOffsetX + Math.sin(t * 0.15) * 1.5;
-    camera.position.y = airplane.position.y + camOffsetY - 2 + Math.sin(t * 0.25) * 0.5;
-    camera.position.z = airplane.position.z + camOffsetZ;
-  } else if (airplane) {
-    camera.position.x += (airplane.position.x + camOffsetX - camera.position.x) * 0.03;
-    camera.position.y += (airplane.position.y + camOffsetY - camera.position.y) * 0.03;
-    camera.position.z += (airplane.position.z + camOffsetZ - camera.position.z) * 0.03;
+    targetCamX += Math.sin(t * 0.15) * 1.5 * easeInOut(flySpeedRamp);
+    targetCamY += Math.sin(t * 0.25) * 0.5 * easeInOut(flySpeedRamp);
+    camTargetLerp = 0.06;
+  } else if (gameState === 'crashed') {
+    camTargetLerp = 0.025;
   } else {
-    camera.position.set(5, 10, 16);
+    camTargetLerp = 0.035;
   }
 
-  camera.lookAt(airplane ? airplane.position.clone().add(new THREE.Vector3(0, 0, -2)) : new THREE.Vector3(0, 2, 0));
+  if (cameraShake > 0) {
+    targetCamX += (Math.random() - 0.5) * cameraShake;
+    targetCamY += (Math.random() - 0.5) * cameraShake;
+    targetCamZ += (Math.random() - 0.5) * cameraShake;
+    cameraShake *= 0.93;
+    if (cameraShake < 0.01) cameraShake = 0;
+  }
+
+  camera.position.x += (targetCamX - camera.position.x) * camLerpFactor;
+  camera.position.y += (targetCamY - camera.position.y) * camLerpFactor;
+  camera.position.z += (targetCamZ - camera.position.z) * camLerpFactor;
+
+  const lookTarget = airplane ? airplane.position.clone().add(new THREE.Vector3(0, 0, -2)) : new THREE.Vector3(0, 2, 0);
+  if (!prevCamTarget) prevCamTarget = lookTarget.clone();
+  prevCamTarget.lerp(lookTarget, camLerpFactor * 1.5);
+  camera.lookAt(prevCamTarget);
 
   updateParticles();
   renderer.render(scene, camera);
@@ -850,6 +903,8 @@ async function beginFlying() {
 
   gameState = 'flying';
   currentMultiplier = 1.00;
+  flySpeedRamp = 0;
+  prevCamTarget = null;
   generateFlightPath();
 
   if (airplane) {
@@ -857,6 +912,7 @@ async function beginFlying() {
     flightPath.startX = airplane.position.x;
     flightPath.weaveTargetX = airplane.position.x;
     airplane.visible = true;
+    airplaneCurrentBank = airplane.rotation.z;
   }
 
   playEngineSound();
@@ -959,7 +1015,7 @@ async function triggerCrash(data) {
         playExplosionSound();
         if (airplane) createExplosionParticles(crashTarget.hitPoint.clone());
         cameraShake = 2.0;
-      }, 750);
+      }, 1100);
     } else {
       playExplosionSound();
       createExplosionParticles(airplane.position.clone());
@@ -992,6 +1048,8 @@ function resetForNewRound() {
   cashedOut = false;
   flightPath = null;
   crashTarget = null;
+  flySpeedRamp = 0;
+  prevCamTarget = null;
 
   for (let i = activeExplosions.length - 1; i >= 0; i--) {
     scene.remove(activeExplosions[i]);
@@ -1001,6 +1059,14 @@ function resetForNewRound() {
   if (airplane) {
     airplane.visible = true;
     airplane.rotation.set(0, Math.PI, 0);
+    airplaneCurrentBank = 0;
+    resetFadeIn = 0.01;
+    airplane.traverse(child => {
+      if (child.isMesh && child.material) {
+        child.material.transparent = true;
+        child.material.opacity = 0;
+      }
+    });
   }
 
   updateMultiplierDisplay(0, 'idle');
