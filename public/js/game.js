@@ -137,8 +137,8 @@ function spawnCitySegment(z) {
 
   for (let j = 0; j < 2; j++) {
     const side = (j === 0) ? -1 : 1;
-    const corridorX = side * (6 + Math.random() * 4);
-    const cWidth = 3 + Math.random() * 4;
+    const corridorX = side * (8 + Math.random() * 5);
+    const cWidth = 3 + Math.random() * 3;
     const cHeight = 8 + Math.random() * 18;
     const cDepth = 3 + Math.random() * 4;
     const geo = new THREE.BoxGeometry(cWidth, cHeight, cDepth);
@@ -631,27 +631,43 @@ function animate() {
       const flyHeight = heightBase + bobAmount;
       const blendedHeight = idleHeight + (flyHeight - idleHeight) * speedMultiplier;
 
+      const lookAhead = 25 + currentSpeed * 10;
       const nearbyBuildings = corridorBuildings.filter(b =>
-        b.z > currentZ - 15 && b.z < currentZ + 5
+        b.z > currentZ - lookAhead && b.z < currentZ + 3
       );
 
+      let bestTarget = fp.weaveTargetX;
       if (nearbyBuildings.length > 0) {
         let closestAhead = null;
         let closestDist = Infinity;
         for (const b of nearbyBuildings) {
           const dist = currentZ - b.z;
-          if (dist > -3 && dist < closestDist) {
+          if (dist > -5 && dist < closestDist) {
             closestDist = dist;
             closestAhead = b;
           }
         }
         if (closestAhead) {
-          const safeDist = (closestAhead.width / 2) + 2.5;
-          fp.weaveTargetX = closestAhead.side === -1 ? safeDist : -safeDist;
+          const safeDist = (closestAhead.width / 2) + 4.0;
+          bestTarget = closestAhead.side === -1 ? safeDist : -safeDist;
         }
+
+        for (const b of nearbyBuildings) {
+          const dz = Math.abs(currentZ - b.z);
+          if (dz < 8) {
+            const bLeft = b.x - b.width / 2 - 3.0;
+            const bRight = b.x + b.width / 2 + 3.0;
+            if (bestTarget > bLeft && bestTarget < bRight) {
+              bestTarget = b.side === -1 ? bRight + 1.5 : bLeft - 1.5;
+            }
+          }
+        }
+        fp.weaveTargetX = bestTarget;
       }
 
-      const weaveLerp = 0.03 + 0.04 * speedMultiplier;
+      fp.weaveTargetX = Math.max(-5.5, Math.min(5.5, fp.weaveTargetX));
+
+      const weaveLerp = 0.05 + 0.06 * speedMultiplier;
       airplane.position.x += (fp.weaveTargetX - airplane.position.x) * weaveLerp;
       airplane.position.y = blendedHeight;
       airplane.position.z = currentZ;
@@ -705,9 +721,24 @@ function animate() {
       const idleSpeed = 0.3;
       const idleZ = 5 - animTime * idleSpeed;
       const bobAmount = Math.sin(animTime * 1.5) * 0.15;
-      const weaveX = Math.sin(animTime * 0.25) * 4;
+      let weaveX = Math.sin(animTime * 0.25) * 4;
 
-      airplane.position.x += (weaveX - airplane.position.x) * 0.04;
+      const idleNearby = corridorBuildings.filter(b =>
+        b.z > idleZ - 20 && b.z < idleZ + 3
+      );
+      for (const b of idleNearby) {
+        const dz = Math.abs(idleZ - b.z);
+        if (dz < 8) {
+          const bLeft = b.x - b.width / 2 - 3.5;
+          const bRight = b.x + b.width / 2 + 3.5;
+          if (weaveX > bLeft && weaveX < bRight) {
+            weaveX = b.side === -1 ? bRight + 1.0 : bLeft - 1.0;
+          }
+        }
+      }
+      weaveX = Math.max(-5.5, Math.min(5.5, weaveX));
+
+      airplane.position.x += (weaveX - airplane.position.x) * 0.05;
       airplane.position.z = idleZ;
       airplane.position.y = airplaneBaseY + 3 + bobAmount;
 
