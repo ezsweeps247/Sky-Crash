@@ -1,16 +1,19 @@
 {
-  "name": "workspace",
+  "name": "sky-crash-3d",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "3D crash game with Boeing 707 airplane navigating through an infinite procedural night city",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["crash-game", "threejs", "3d", "provably-fair"],
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "crypto-js": "^4.2.0",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
