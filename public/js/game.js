@@ -21,9 +21,15 @@ let cityGroup;
 let tickPending = false;
 let buildingPositions = [];
 let corridorBuildings = [];
+let cityBuildingMeshes = [];
 let flightPath = null;
 let crashTarget = null;
 let crashAnimStart = 0;
+let citySegmentZ = 0;
+const CITY_SEGMENT_LENGTH = 10;
+const CITY_RECYCLE_BEHIND = 30;
+const CITY_GENERATE_AHEAD = 120;
+let buildingMaterials = [];
 
 function init3D() {
   const canvas = document.getElementById('three-canvas');
@@ -63,10 +69,6 @@ function init3D() {
   warmGlow.position.set(-10, 5, -15);
   scene.add(warmGlow);
 
-  const spotOnPlane = new THREE.PointLight(0xffffff, 1.5, 30);
-  spotOnPlane.position.set(0, 8, 5);
-  scene.add(spotOnPlane);
-
   createStarField();
   loadModels();
   createProceduralCity();
@@ -102,79 +104,118 @@ function createStarField() {
 function createProceduralCity() {
   cityGroup = new THREE.Group();
   buildingPositions = [];
+  corridorBuildings = [];
+  cityBuildingMeshes = [];
 
-  const buildingMaterials = [
+  buildingMaterials = [
     new THREE.MeshStandardMaterial({ color: 0x1a1a2e, emissive: 0x0a0a15, roughness: 0.8, metalness: 0.3 }),
     new THREE.MeshStandardMaterial({ color: 0x16213e, emissive: 0x080818, roughness: 0.7, metalness: 0.4 }),
     new THREE.MeshStandardMaterial({ color: 0x0f3460, emissive: 0x050520, roughness: 0.6, metalness: 0.5 }),
     new THREE.MeshStandardMaterial({ color: 0x1a1a3e, emissive: 0x0a0a20, roughness: 0.7, metalness: 0.3 })
   ];
 
-  corridorBuildings = [];
-  for (let i = 0; i < 25; i++) {
-    const width = 3 + Math.random() * 4;
-    const height = 8 + Math.random() * 18;
-    const depth = 3 + Math.random() * 4;
-    const geometry = new THREE.BoxGeometry(width, height, depth);
-    const material = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
-    const building = new THREE.Mesh(geometry, material);
-
-    const side = (i % 2 === 0) ? -1 : 1;
-    const x = side * (8 + Math.random() * 4);
-    const z = -8 - i * 5;
-    building.position.set(x, height / 2 - 2, z);
-    building.castShadow = true;
-    building.receiveShadow = true;
-    cityGroup.add(building);
-    const bData = { x: x, y: height / 2 - 2, z: z, height: height, width: width, depth: depth, side: side };
-    buildingPositions.push(bData);
-    corridorBuildings.push(bData);
-
-    addWindowLights(building, width, height, depth, x, z);
+  for (let z = 10; z > -CITY_GENERATE_AHEAD; z -= CITY_SEGMENT_LENGTH) {
+    spawnCitySegment(z);
   }
-
-  for (let side = 0; side < 2; side++) {
-    for (let i = 0; i < 25; i++) {
-      const width = 2 + Math.random() * 4;
-      const height = 5 + Math.random() * 16;
-      const depth = 2 + Math.random() * 4;
-      const geometry = new THREE.BoxGeometry(width, height, depth);
-      const material = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
-      const building = new THREE.Mesh(geometry, material);
-
-      const x = side === 0 ? -16 - Math.random() * 12 : 16 + Math.random() * 12;
-      const z = -2 - i * 5 + (Math.random() - 0.5) * 3;
-      building.position.set(x, height / 2 - 2, z);
-      building.castShadow = true;
-      cityGroup.add(building);
-      buildingPositions.push({ x: x, y: height / 2 - 2, z: z, height: height, width: width, depth: depth });
-
-      addWindowLights(building, width, height, depth, x, z);
-    }
-  }
+  citySegmentZ = -CITY_GENERATE_AHEAD;
 
   scene.add(cityGroup);
 }
 
-function generateFlightPath() {
-  const speed = 0.5 + Math.random() * 0.3;
-  const startX = (Math.random() - 0.5) * 2;
-  const startZ = 8 + Math.random() * 3;
-  const climbRate = 0.04 + Math.random() * 0.06;
-  const bankAmplitude = 0.3 + Math.random() * 0.15;
+function spawnCitySegment(z) {
+  const segGroup = new THREE.Group();
+  segGroup.userData.segZ = z;
+  segGroup.userData.buildings = [];
+  segGroup.userData.corridorBuilds = [];
 
-  const sorted = corridorBuildings.slice().sort((a, b) => b.z - a.z);
-
-  const weavePoints = [{ x: startX, z: startZ }];
-
-  for (let i = 0; i < sorted.length; i++) {
-    const b = sorted[i];
-    const safeDist = (b.width / 2) + 3;
-    const dodgeX = b.side === -1 ? safeDist : -safeDist;
-    weavePoints.push({ x: dodgeX, z: b.z });
+  for (let j = 0; j < 2; j++) {
+    const side = (j === 0) ? -1 : 1;
+    const corridorX = side * (6 + Math.random() * 4);
+    const cWidth = 3 + Math.random() * 4;
+    const cHeight = 8 + Math.random() * 18;
+    const cDepth = 3 + Math.random() * 4;
+    const geo = new THREE.BoxGeometry(cWidth, cHeight, cDepth);
+    const mat = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
+    const bld = new THREE.Mesh(geo, mat);
+    const bz = z - Math.random() * CITY_SEGMENT_LENGTH * 0.6;
+    bld.position.set(corridorX, cHeight / 2 - 2, bz);
+    bld.castShadow = true;
+    bld.receiveShadow = true;
+    segGroup.add(bld);
+    const bData = { x: corridorX, y: cHeight / 2 - 2, z: bz, height: cHeight, width: cWidth, depth: cDepth, side: side, segZ: z };
+    buildingPositions.push(bData);
+    corridorBuildings.push(bData);
+    segGroup.userData.buildings.push(bData);
+    segGroup.userData.corridorBuilds.push(bData);
+    addWindowLightsToGroup(segGroup, cWidth, cHeight, cDepth, corridorX, bz);
   }
 
-  flightPath = { speed, startX, startZ, climbRate, bankAmplitude, weavePoints };
+  for (let s = 0; s < 2; s++) {
+    const outerCount = 2 + Math.floor(Math.random() * 3);
+    for (let k = 0; k < outerCount; k++) {
+      const oWidth = 2 + Math.random() * 4;
+      const oHeight = 5 + Math.random() * 16;
+      const oDepth = 2 + Math.random() * 4;
+      const geo = new THREE.BoxGeometry(oWidth, oHeight, oDepth);
+      const mat = buildingMaterials[Math.floor(Math.random() * buildingMaterials.length)].clone();
+      const bld = new THREE.Mesh(geo, mat);
+      const ox = s === 0 ? -14 - Math.random() * 14 : 14 + Math.random() * 14;
+      const oz = z - Math.random() * CITY_SEGMENT_LENGTH;
+      bld.position.set(ox, oHeight / 2 - 2, oz);
+      bld.castShadow = true;
+      segGroup.add(bld);
+      const bData = { x: ox, y: oHeight / 2 - 2, z: oz, height: oHeight, width: oWidth, depth: oDepth, segZ: z };
+      buildingPositions.push(bData);
+      segGroup.userData.buildings.push(bData);
+      addWindowLightsToGroup(segGroup, oWidth, oHeight, oDepth, ox, oz);
+    }
+  }
+
+  cityGroup.add(segGroup);
+  cityBuildingMeshes.push(segGroup);
+}
+
+function recycleCityBuildings(planeZ) {
+  const generateAt = planeZ - CITY_GENERATE_AHEAD;
+  while (citySegmentZ > generateAt) {
+    citySegmentZ -= CITY_SEGMENT_LENGTH;
+    spawnCitySegment(citySegmentZ);
+  }
+
+  for (let i = cityBuildingMeshes.length - 1; i >= 0; i--) {
+    const seg = cityBuildingMeshes[i];
+    if (seg.userData.segZ > planeZ + CITY_RECYCLE_BEHIND) {
+      const segBuildings = seg.userData.buildings || [];
+      const segCorridor = seg.userData.corridorBuilds || [];
+      for (const b of segBuildings) {
+        const idx = buildingPositions.indexOf(b);
+        if (idx !== -1) buildingPositions.splice(idx, 1);
+      }
+      for (const b of segCorridor) {
+        const idx = corridorBuildings.indexOf(b);
+        if (idx !== -1) corridorBuildings.splice(idx, 1);
+      }
+
+      cityGroup.remove(seg);
+      seg.traverse(child => {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+          else child.material.dispose();
+        }
+      });
+      cityBuildingMeshes.splice(i, 1);
+    }
+  }
+}
+
+function generateFlightPath() {
+  const speed = 0.6 + Math.random() * 0.3;
+  const startX = (Math.random() - 0.5) * 2;
+  const startZ = 5;
+  const bankAmplitude = 0.3 + Math.random() * 0.15;
+
+  flightPath = { speed, startX, startZ, bankAmplitude, lastWeaveZ: startZ, weaveTargetX: startX };
 }
 
 function pickCrashTarget() {
@@ -203,7 +244,7 @@ function pickCrashTarget() {
   crashAnimStart = Date.now();
 }
 
-function addWindowLights(building, bWidth, bHeight, bDepth, bx, bz) {
+function addWindowLightsToGroup(group, bWidth, bHeight, bDepth, bx, bz) {
   const windowSize = 0.15;
   const windowMat = new THREE.MeshBasicMaterial({ color: 0xffee88 });
   const windowMatBlue = new THREE.MeshBasicMaterial({ color: 0x44aaff });
@@ -225,7 +266,7 @@ function addWindowLights(building, bWidth, bHeight, bDepth, bx, bz) {
         win.position.set(bx + wx, wy + bHeight / 2 - 1, bz - bDepth / 2 - 0.01);
         win.rotation.y = Math.PI;
       }
-      cityGroup.add(win);
+      group.add(win);
     }
   }
 }
@@ -258,6 +299,10 @@ function loadModels() {
     navLightRight.position.set(0, 0, -3);
     airplane.add(navLightRight);
 
+    const planeSpot = new THREE.PointLight(0xffffff, 2.0, 40);
+    planeSpot.position.set(0, 5, 0);
+    airplane.add(planeSpot);
+
     scene.add(airplane);
     console.log('Boeing 707 GLTF model loaded successfully');
   }, undefined, (error) => {
@@ -278,30 +323,6 @@ function loadModels() {
     console.warn('Could not load explosion GLTF model:', error);
   });
 
-  loader.load('/models/city/scene.gltf', (gltf) => {
-    const cityModel = gltf.scene;
-    cityModel.scale.set(0.8, 0.8, 0.8);
-    cityModel.position.set(0, -8, -40);
-    cityModel.traverse((child) => {
-      if (child.isMesh) { child.receiveShadow = true; }
-    });
-    scene.add(cityModel);
-    cityModels.push(cityModel);
-
-    const cityModel2 = cityModel.clone();
-    cityModel2.position.set(30, -8, -50);
-    cityModel2.rotation.y = Math.PI * 0.5;
-    scene.add(cityModel2);
-    cityModels.push(cityModel2);
-
-    const cityModel3 = cityModel.clone();
-    cityModel3.position.set(-30, -8, -45);
-    cityModel3.rotation.y = -Math.PI * 0.3;
-    scene.add(cityModel3);
-    cityModels.push(cityModel3);
-  }, undefined, (error) => {
-    console.warn('Could not load city GLTF model');
-  });
 }
 
 function createAirplane() {
@@ -564,34 +585,44 @@ function animate() {
 
       const forwardDist = flyTime * fp.speed;
       const currentZ = fp.startZ - forwardDist;
-      const heightGain = Math.min(flyTime * fp.climbRate, 5);
       const bobAmount = Math.sin(flyTime * 2) * 0.1;
+      const heightBase = airplaneBaseY + 2 + Math.sin(flyTime * 0.3) * 1.5;
 
-      let targetX = fp.startX;
-      const wp = fp.weavePoints;
-      for (let i = 0; i < wp.length - 1; i++) {
-        if (currentZ <= wp[i].z && currentZ > wp[i + 1].z) {
-          const segLen = wp[i].z - wp[i + 1].z;
-          const progress = (wp[i].z - currentZ) / segLen;
-          const smoothT = progress * progress * (3 - 2 * progress);
-          targetX = wp[i].x + (wp[i + 1].x - wp[i].x) * smoothT;
-          break;
+      const nearbyBuildings = corridorBuildings.filter(b =>
+        b.z > currentZ - 15 && b.z < currentZ + 5
+      );
+
+      if (nearbyBuildings.length > 0) {
+        let closestAhead = null;
+        let closestDist = Infinity;
+        for (const b of nearbyBuildings) {
+          const dist = currentZ - b.z;
+          if (dist > -3 && dist < closestDist) {
+            closestDist = dist;
+            closestAhead = b;
+          }
+        }
+        if (closestAhead) {
+          const safeDist = (closestAhead.width / 2) + 2.5;
+          fp.weaveTargetX = closestAhead.side === -1 ? safeDist : -safeDist;
         }
       }
 
-      airplane.position.x += (targetX - airplane.position.x) * 0.12;
-      airplane.position.y = airplaneBaseY + bobAmount + heightGain;
+      airplane.position.x += (fp.weaveTargetX - airplane.position.x) * 0.06;
+      airplane.position.y = heightBase + bobAmount;
       airplane.position.z = currentZ;
 
-      const dx = targetX - airplane.position.x;
-      const bankTarget = Math.max(-0.5, Math.min(0.5, dx * fp.bankAmplitude));
-      airplaneCurrentBank += (bankTarget - airplaneCurrentBank) * 0.06;
+      recycleCityBuildings(currentZ);
+
+      const dx = fp.weaveTargetX - airplane.position.x;
+      const bankTarget = Math.max(-0.4, Math.min(0.4, dx * 0.15));
+      airplaneCurrentBank += (bankTarget - airplaneCurrentBank) * 0.05;
       airplane.rotation.z = airplaneCurrentBank;
 
       const pitchOsc = Math.sin(flyTime * 0.7) * 0.03 - 0.02;
       airplane.rotation.x = pitchOsc;
 
-      airplane.rotation.y = Math.PI + airplaneCurrentBank * 0.3;
+      airplane.rotation.y = Math.PI + airplaneCurrentBank * 0.25;
 
     } else if (gameState === 'crashed') {
       if (crashTarget && crashTarget.hitPoint) {
@@ -620,18 +651,22 @@ function animate() {
         }
       }
     } else {
-      const idleTime = animTime * 0.4;
-      const circleRadius = 6;
-      airplane.position.x = Math.sin(idleTime) * circleRadius;
-      airplane.position.z = Math.cos(idleTime) * circleRadius;
-      airplane.position.y = airplaneBaseY + 2 + Math.sin(animTime * 1.2) * 0.3;
+      const idleSpeed = 0.3;
+      const idleZ = 5 - animTime * idleSpeed;
+      const bobAmount = Math.sin(animTime * 1.5) * 0.15;
+      const weaveX = Math.sin(animTime * 0.25) * 4;
 
-      const headingAngle = Math.atan2(Math.cos(idleTime), -Math.sin(idleTime));
-      airplane.rotation.y = headingAngle;
+      airplane.position.x += (weaveX - airplane.position.x) * 0.04;
+      airplane.position.z = idleZ;
+      airplane.position.y = airplaneBaseY + 3 + bobAmount;
 
-      const bankAngle = Math.sin(idleTime) * 0.15;
-      airplane.rotation.z = -bankAngle;
+      const dx = weaveX - airplane.position.x;
+      const idleBank = Math.max(-0.2, Math.min(0.2, dx * 0.1));
+      airplane.rotation.z += (idleBank - airplane.rotation.z) * 0.04;
+      airplane.rotation.y = Math.PI + airplane.rotation.z * 0.2;
       airplane.rotation.x = Math.sin(animTime * 0.8) * 0.02;
+
+      recycleCityBuildings(idleZ);
     }
   }
 
@@ -653,11 +688,11 @@ function animate() {
     camera.position.x = airplane.position.x + camOffsetX + Math.sin(t * 0.15) * 1.5;
     camera.position.y = airplane.position.y + camOffsetY - 2 + Math.sin(t * 0.25) * 0.5;
     camera.position.z = airplane.position.z + camOffsetZ;
-  } else if (gameState === 'idle' && airplane) {
-    camera.position.x = airplane.position.x + camOffsetX;
-    camera.position.y = airplane.position.y + camOffsetY;
-    camera.position.z = airplane.position.z + camOffsetZ;
-  } else if (gameState === 'idle') {
+  } else if (airplane) {
+    camera.position.x += (airplane.position.x + camOffsetX - camera.position.x) * 0.03;
+    camera.position.y += (airplane.position.y + camOffsetY - camera.position.y) * 0.03;
+    camera.position.z += (airplane.position.z + camOffsetZ - camera.position.z) * 0.03;
+  } else {
     camera.position.set(5, 10, 16);
   }
 
@@ -818,7 +853,9 @@ async function beginFlying() {
   generateFlightPath();
 
   if (airplane) {
-    airplane.position.set(flightPath.startX, airplaneBaseY, flightPath.startZ);
+    flightPath.startZ = airplane.position.z;
+    flightPath.startX = airplane.position.x;
+    flightPath.weaveTargetX = airplane.position.x;
     airplane.visible = true;
   }
 
@@ -962,11 +999,9 @@ function resetForNewRound() {
   activeExplosions = [];
 
   if (airplane) {
-    airplane.position.set(0, airplaneBaseY, 0);
-    airplane.rotation.set(0, Math.PI, 0);
     airplane.visible = true;
+    airplane.rotation.set(0, Math.PI, 0);
   }
-  camera.position.set(5, 10, 16);
 
   updateMultiplierDisplay(0, 'idle');
   setButtonState('bet');
