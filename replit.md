@@ -4,12 +4,14 @@
 A 3D crash game built with Three.js featuring a Boeing 707 airplane navigating through an infinite procedural night city. Players bet and cash out before the plane crashes. Uses provably fair SHA-256 hash chain for crash point determination. The plane flies continuously, weaving between buildings, and the city regenerates endlessly ahead.
 
 ## Architecture
-- **Backend**: Node.js + Express server on port 5000
+- **Backend**: Node.js + Express server (configurable PORT, defaults to 5000)
 - **Frontend**: Vanilla JS + Three.js (r128) for 3D rendering
+- **Database**: PostgreSQL via Neon DB (optional, graceful fallback to in-memory)
 - **Provably Fair**: SHA-256 hash chain with HMAC for crash point generation
 - **3D City**: Infinite procedural city with segment-based recycling system
 - **3D Models**: GLTF format - Boeing 707 airplane + Sparks/Explosion effect
 - **Sound**: Engine loop (WAV) + Explosion (FLAC)
+- **Deployment**: Railway with Nixpacks builder
 
 ## Project Structure
 ```
