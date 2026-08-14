@@ -29,26 +29,51 @@ public/
 - Infinite procedural city with segment-based building recycling
 - Boeing 707 airplane always in motion, weaving between buildings
 - Building-aware flight path that dodges corridor buildings dynamically
+- Aircraft lighting rig (blinking beacon, double-flash strobes, nav lights,
+  landing light) positioned from the model's real geometry, plus wingtip
+  contrails and flickering engine glow
 - Provably fair crash determination (SHA-256 HMAC hash chain)
 - Plane crashes into nearby building when crash point is reached
+- Smooth round loop: crash → countdown → fade to black → world rebuilt at the
+  runway → fade in, so every takeoff faces a fresh skyline
 - Auto-cashout functionality
+- Cashout win banner with gold burst; near-miss camera punches; FOV widens
+  with speed as the multiplier climbs (multiplier growth rate 0.12, shared
+  GROWTH_RATE constant in server.js and game.js)
+- Session P/L + biggest-win stats; demo balance persisted in localStorage
 - Round history with verification modal
 - Explosion particles and camera shake on crash
-- Mobile-responsive UI
+- Mobile-responsive UI (vibration feedback on cashout/crash)
 
 ## City System
 - Buildings spawn in segments ahead of the plane
+- Windows are baked into shared canvas textures (color + emissive maps) with
+  per-face UV mapping so window size stays constant in world units — one mesh
+  per building instead of hundreds of window meshes
 - Corridor buildings placed on alternating sides for weaving
-- Outer buildings fill the background cityscape
-- Segments are recycled (meshes disposed, metadata pruned) when behind camera
+- Outer buildings fill the background cityscape; some towers are tiered and
+  carry rooftop water tanks/AC units, blinking aviation beacons, neon strips
+- Street level: road with markings under the flight corridor, street lamps
+  with glow pools, and a small pool of moving cars
+- Segments are recycled (meshes disposed, metadata pruned) when behind camera;
+  shared materials are never disposed
+- Between rounds the entire city is rebuilt around the runway so round 2+
+  never flies through the hollowed-out corridor of the previous flight
 - Building metadata arrays (buildingPositions, corridorBuildings) stay in sync with rendered segments
 
 ## Flight System
-- Idle: Plane sits on runway, awaiting bet
-- Takeoff: Plane accelerates down runway and lifts off (3.5 second sequence)
-- Flying: Plane flies through city, dynamically dodges corridor buildings
-- Crashed: Plane nosedives into nearest tall building, explosion at impact
-- Camera follows plane at all times with smooth tracking
+- Idle: Plane sits parked on the runway, awaiting bet
+- Takeoff: Plane accelerates down runway with rumble, rotates and lifts off
+  (3.5 second sequence)
+- Flying: motion uses an integrated speed that eases from takeoff speed toward
+  cruise and creeps up with the multiplier; plane dodges corridor buildings
+- Crashed: Plane nosedives into a nearby building (never a distant one) or the
+  ground, explosion at impact
+- Reset: countdown → fade to black → plane re-parked, camera snapped, city
+  rebuilt → fade in
+- Camera: speed-aware chase with velocity feedforward so the plane stays
+  framed during the takeoff roll; separate visual motion clock keeps flight
+  position free of jumps (the server clock drives only the multiplier)
 
 ## API Endpoints
 - GET /api/game/new - Start a new round (returns commitment hash)
