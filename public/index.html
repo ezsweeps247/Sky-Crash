@@ -13,14 +13,18 @@
     <div id="ui-overlay">
       <div class="top-bar">
         <div class="logo">SKY CRASH</div>
+        <div class="stats-display" id="stat-profit">P/L +0.00</div>
         <div class="balance-display">
           <span class="coin">&#9733;</span>
           <span id="balance">1000.00</span>
+          <button id="reset-balance" onclick="resetDemoBalance()">RESET</button>
         </div>
       </div>
 
       <div class="multiplier-display">
+        <div id="win-banner"></div>
         <div id="multiplier-text" class="waiting">PLACE YOUR BET</div>
+        <div id="round-countdown"></div>
       </div>
 
       <div class="bottom-panel">
@@ -63,6 +67,8 @@
     <div id="crash-overlay">
       <div class="crash-flash"></div>
     </div>
+
+    <div id="fade-overlay"></div>
 
     <div id="verify-modal">
       <div class="modal-content">

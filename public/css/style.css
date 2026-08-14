@@ -75,12 +75,101 @@ body {
   font-size: 16px;
 }
 
+.stats-display {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8a93a5;
+  background: rgba(255,255,255,0.06);
+  padding: 5px 12px;
+  border-radius: 14px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.stats-display.pos { color: #00e676; }
+.stats-display.neg { color: #ff5252; }
+
+#reset-balance {
+  display: none;
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  background: rgba(255, 215, 0, 0.12);
+  color: #ffd700;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  letter-spacing: 1px;
+}
+
 .multiplier-display {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   pointer-events: none;
+}
+
+#win-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #ffd700;
+  background: linear-gradient(135deg, rgba(50, 40, 0, 0.85), rgba(80, 60, 0, 0.85));
+  border: 1px solid rgba(255, 215, 0, 0.5);
+  border-radius: 14px;
+  padding: 8px 18px;
+  opacity: 0;
+  transform: translateY(-12px) scale(0.9);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#win-banner span {
+  color: #fff;
+  font-size: 22px;
+  text-shadow: 0 0 16px rgba(255, 215, 0, 0.8);
+}
+
+#win-banner.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  animation: winPop 0.45s ease;
+}
+
+@keyframes winPop {
+  0% { transform: translateY(-12px) scale(0.7); }
+  55% { transform: translateY(2px) scale(1.08); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+#round-countdown {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #9aa5b8;
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+#round-countdown.show {
+  opacity: 1;
+}
+
+#multiplier-text.nearmiss {
+  animation: nearMissJolt 0.45s ease-out;
+}
+
+@keyframes nearMissJolt {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.12) rotate(-1.5deg); }
+  60% { transform: scale(0.98) rotate(1deg); }
+  100% { transform: scale(1); }
 }
 
 #multiplier-text {
@@ -225,6 +314,15 @@ body {
   color: #fff;
 }
 
+.bet-quick-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.bet-input-row input:disabled {
+  opacity: 0.45;
+}
+
 .action-btn {
   width: 140px;
   border: none;
@@ -316,6 +414,23 @@ body {
   text-decoration: underline;
   margin-top: 4px;
   display: inline-block;
+}
+
+#fade-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 150;
+  pointer-events: none;
+  background: #05050f;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+#fade-overlay.show {
+  opacity: 1;
 }
 
 #crash-overlay {

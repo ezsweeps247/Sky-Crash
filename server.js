@@ -13,6 +13,8 @@ app.use(express.static('public', {
 
 const PORT = process.env.PORT || 5000;
 const SALT = 'sky-crash-provably-fair-v1';
+// Multiplier growth rate — must stay in sync with GROWTH_RATE in public/js/game.js
+const GROWTH_RATE = 0.12;
 
 let db = null;
 
@@ -155,6 +157,8 @@ app.post('/api/game/start', (req, res) => {
   if (!gameState.currentRound) {
     return res.status(400).json({ error: 'No active round' });
   }
+  const betAmount = parseFloat(req.body && req.body.betAmount);
+  gameState.currentRound.betAmount = (isFinite(betAmount) && betAmount > 0) ? Math.min(betAmount, 100) : 0;
   gameState.currentRound.status = 'flying';
   gameState.currentRound.startTime = Date.now();
   res.json({
@@ -170,7 +174,7 @@ app.post('/api/game/tick', async (req, res) => {
   }
 
   const elapsed = (Date.now() - gameState.currentRound.startTime) / 1000;
-  const currentMultiplier = Math.pow(Math.E, 0.07 * elapsed);
+  const currentMultiplier = Math.pow(Math.E, GROWTH_RATE * elapsed);
   const mult = Math.floor(currentMultiplier * 100) / 100;
 
   if (mult >= gameState.currentRound.crashPoint) {
@@ -210,13 +214,16 @@ app.post('/api/game/tick', async (req, res) => {
 });
 
 app.post('/api/game/cashout', (req, res) => {
-  const { betAmount } = req.body;
   if (!gameState.currentRound || gameState.currentRound.status !== 'flying') {
     return res.json({ success: false, message: 'Cannot cash out now' });
   }
 
+  // Use the bet recorded at round start; fall back to the client-supplied value
+  // only for rounds started before this field existed.
+  const betAmount = gameState.currentRound.betAmount || parseFloat(req.body && req.body.betAmount) || 0;
+
   const elapsed = (Date.now() - gameState.currentRound.startTime) / 1000;
-  const currentMultiplier = Math.pow(Math.E, 0.07 * elapsed);
+  const currentMultiplier = Math.pow(Math.E, GROWTH_RATE * elapsed);
   const mult = Math.floor(currentMultiplier * 100) / 100;
 
   if (mult >= gameState.currentRound.crashPoint) {
