@@ -10,7 +10,10 @@ A 3D crash game built with Three.js featuring a Boeing 707 airplane navigating t
 - **Provably Fair**: SHA-256 hash chain with HMAC for crash point generation
 - **3D City**: Infinite procedural city with segment-based recycling system
 - **3D Models**: GLTF format - Boeing 707 airplane + Sparks/Explosion effect
-- **Sound**: Engine loop (WAV) + Explosion (FLAC)
+- **Sound**: Engine loop (WAV) routed through a WebAudio graph — takeoff
+  spool-up (pitch + volume envelope over the roll), runway-rumble noise layer
+  that cuts at liftoff, cruise pitch that rises with the multiplier — plus
+  Explosion (FLAC). Falls back to the plain flat loop without AudioContext.
 - **Deployment**: Railway with Nixpacks builder
 
 ## Project Structure

@@ -1,5 +1,11 @@
 let scene, camera, renderer, airplane, airplaneModel = null;
 let engineSound, explosionSound;
+// WebAudio layer over the engine loop: spool-up pitch/volume on takeoff,
+// runway-rumble noise while the gear is on the ground, multiplier-linked
+// cruise pitch. Falls back to the plain flat loop if AudioContext is missing.
+let audioCtx = null;
+let engineGain = null;
+let rumbleGain = null;
 let explosionModel = null;
 let runwayModel = null;
 let activeExplosions = [];
@@ -1011,17 +1017,97 @@ function createProceduralRunway() {
 function initAudio() {
   engineSound = new Audio('/sounds/engine.wav');
   engineSound.loop = true;
-  engineSound.volume = 0.15;
+  engineSound.volume = 0.15; // fallback level; the gain node takes over once the graph builds
+  engineSound.preservesPitch = false; // playbackRate doubles as engine RPM
+  engineSound.webkitPreservesPitch = false;
 
   explosionSound = new Audio('/sounds/explosion.flac');
   explosionSound.volume = 0.5;
 }
 
-function playEngineSound() {
-  if (engineSound) {
-    engineSound.currentTime = 0;
-    engineSound.play().catch(() => {});
+// Build the WebAudio graph lazily inside a user gesture (the BET click), so
+// autoplay policy lets the context start.
+function ensureAudioGraph() {
+  if (audioCtx) {
+    audioCtx.resume().catch(() => {});
+    return;
   }
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx || !engineSound) return;
+  try {
+    audioCtx = new Ctx();
+    const src = audioCtx.createMediaElementSource(engineSound);
+    engineGain = audioCtx.createGain();
+    engineGain.gain.value = 0;
+    src.connect(engineGain).connect(audioCtx.destination);
+    engineSound.volume = 1; // levels are driven by the gain node now
+
+    // Runway rumble: looped low-passed noise, silent until the takeoff roll
+    const len = audioCtx.sampleRate;
+    const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buf;
+    noise.loop = true;
+    const lowpass = audioCtx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 90;
+    rumbleGain = audioCtx.createGain();
+    rumbleGain.gain.value = 0;
+    noise.connect(lowpass).connect(rumbleGain).connect(audioCtx.destination);
+    noise.start();
+  } catch (e) {
+    audioCtx = null;
+    engineGain = null;
+    rumbleGain = null;
+  }
+}
+
+// Per-frame engine sound envelope, driven by the same state machine as the
+// visuals: spool up through the roll, roar at rotation, settle to cruise with
+// pitch that rises alongside the multiplier. Smoothing is wall-clock-based so
+// the spool-up takes the same real time at any display refresh rate.
+let lastAudioTime = 0;
+function updateEngineAudio() {
+  if (!audioCtx || !engineGain) return;
+  const now = performance.now();
+  const realDt = lastAudioTime ? Math.min(0.25, (now - lastAudioTime) / 1000) : 0.016;
+  lastAudioTime = now;
+  const kGain = 1 - Math.exp(-realDt * 6);
+  const kRate = 1 - Math.exp(-realDt * 4);
+
+  let gainTarget = 0;
+  let rateTarget = 1;
+  let rumbleTarget = 0;
+
+  if (gameState === 'takeoff' || gameState === 'transitioning') {
+    const t = (Date.now() - takeoffStartTime) / 1000;
+    const progress = Math.min(t / TAKEOFF_DURATION, 1);
+    gainTarget = Math.min(0.38, 0.1 + progress * 0.45);
+    if (progress > 0.5) gainTarget += Math.sin(animTime * 31) * 0.015; // full-power flutter
+    rateTarget = 0.55 + progress * 0.7;
+    rumbleTarget = progress < 0.55 ? 0.1 + progress * 0.3 : 0.03;
+  } else if (gameState === 'flying') {
+    gainTarget = 0.22;
+    rateTarget = 1.0 + (speedFactor() - 1) * 0.25;
+  }
+
+  engineGain.gain.value += (gainTarget - engineGain.gain.value) * kGain;
+  if (rumbleGain) rumbleGain.gain.value += (rumbleTarget - rumbleGain.gain.value) * kGain;
+  const r = engineSound.playbackRate + (rateTarget - engineSound.playbackRate) * kRate;
+  engineSound.playbackRate = Math.max(0.5, Math.min(2, r));
+}
+
+function playEngineSound() {
+  if (!engineSound) return;
+  ensureAudioGraph();
+  // Already running (e.g. the takeoff→flying handoff) — let the envelope
+  // carry on rather than restarting the loop with an audible blip.
+  if (!engineSound.paused) return;
+  engineSound.playbackRate = gameState === 'takeoff' ? 0.55 : 1;
+  engineSound.currentTime = 0;
+  engineSound.play().catch(() => {});
 }
 
 function stopEngineSound() {
@@ -1545,6 +1631,7 @@ function animate() {
     ageContrail(contrailR, dt);
     updatePlaneEffects(dt);
   }
+  updateEngineAudio();
   updateCityLife(dt);
 
   const camOffsetX = 5;
